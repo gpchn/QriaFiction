@@ -56,6 +56,7 @@ class Interpreter:
         self.qf_ctx = QriaContext(self.runtime)
         self.script_dir = script_dir
         self._source_cache: dict[str, list[str]] = {}
+        self._python_scope: dict = {"qf": None}
 
     def run(self, program: Program):
         self._collect_labels(program)
@@ -87,16 +88,12 @@ class Interpreter:
             if self.runtime.pending_jump:
                 continue
             if self.runtime.pending_dialogues:
-                self.runtime.running = False
                 return
             if self.runtime.pending_input:
-                self.runtime.running = False
                 return
             if self.runtime.pending_interact:
-                self.runtime.running = False
                 return
             if self.runtime.pending_save or self.runtime.pending_load or self.runtime.pending_quit:
-                self.runtime.running = False
                 return
 
             i += 1
@@ -201,7 +198,7 @@ class Interpreter:
                     self.runtime.pending_jump = None
                 if self.runtime.pending_dialogues or self.runtime.pending_input or self.runtime.pending_interact:
                     return
-                if not self.runtime.running:
+                if self.runtime.pending_save or self.runtime.pending_load or self.runtime.pending_quit:
                     return
 
         elif isinstance(stmt, WaitStmt):
@@ -249,9 +246,10 @@ class Interpreter:
                     return
 
     def _execute_python(self, code: str):
-        scope = {"qf": self.qf_ctx}
+        if self._python_scope.get("qf") is None:
+            self._python_scope["qf"] = self.qf_ctx
         try:
-            exec(code, scope)
+            exec(code, self._python_scope)
         except Exception as e:
             raise QFRuntimeError(f"Python 执行错误: {e}")
 

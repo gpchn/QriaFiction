@@ -28,7 +28,7 @@ def _log(level, tag, *args):
 
 class GameRunner:
     def __init__(self):
-        self.runtime = Runtime()
+        self.runtime = None
         self.interp = None
         self.program = None
         self.window = None
@@ -38,10 +38,11 @@ class GameRunner:
         self._python_scope = {}
         self._running = False
         self._lock = threading.Lock()
-        self._return_stack = []
-        self._current_index = 0
         self._script_dir = None
         self._save_dir = None
+        self._current_stmt_index = 0
+        self._call_stack = []
+        self._last_include_stmt = None
 
     def is_running(self):
         return self._running
@@ -49,7 +50,8 @@ class GameRunner:
     def stop(self):
         _log("I", "stop", "called")
         self._running = False
-        self.runtime.running = False
+        if self.runtime:
+            self.runtime.running = False
         self.user_input_event.set()
         self.continue_event.set()
 
@@ -63,8 +65,8 @@ class GameRunner:
             self.user_input_value = ""
             self.continue_event.clear()
             self._python_scope = {}
-            self._return_stack = []
-            self._current_index = 0
+            self._call_stack = []
+            self._current_stmt_index = 0
             self._script_dir = None
             self._save_dir = None
 
@@ -174,11 +176,9 @@ class GameRunner:
         self._running = False
 
     def _run_program(self):
-        import core.ast as ast_mod
-
         non_label_stmts = []
         for stmt in self.program.statements:
-            if isinstance(stmt, ast_mod.LabelStmt):
+            if hasattr(stmt, 'name') and isinstance(stmt.name, str) and hasattr(stmt, 'body'):
                 continue
             non_label_stmts.append(stmt)
 
@@ -197,15 +197,15 @@ class GameRunner:
             self._show_dialogue(None, f"[错误] 未知标签: {label_name}")
             return
         self.runtime.current_label = label_name
+        self.interp.runtime.current_label = label_name
         self._exec_block(self.interp.labels[label_name], resume_from=resume_from)
 
     def _exec_block(self, statements: list, resume_from: int = 0):
         import core.ast as ast_mod
         i = resume_from
         while i < len(statements) and self.runtime.running:
-            self._current_index = i
+            self._current_stmt_index = i
             stmt = statements[i]
-            _log("D", "exec", f"[{i}] {type(stmt).__name__}")
 
             self._exec_stmt(stmt)
 
@@ -217,8 +217,8 @@ class GameRunner:
                 self.runtime.pending_jump = None
                 if target == "__break__" or target == "__continue__":
                     return
-                if self._return_stack:
-                    label, resume_idx = self._return_stack.pop()
+                if self._call_stack:
+                    label, resume_idx = self._call_stack.pop()
                     _log("I", "return", f"-> {label}[{resume_idx}]")
                     self._exec_label(label, resume_from=resume_idx)
                     return
@@ -228,27 +228,24 @@ class GameRunner:
             if self.runtime.pending_save:
                 self.runtime.pending_save = False
                 self._do_save()
-                # 恢复执行，继续下一条语句
                 i += 1
                 continue
 
             if self.runtime.pending_load:
                 self.runtime.pending_load = False
                 self._do_load()
-                # 读档后跳转到存档时的标签
                 if self.runtime.pending_jump:
                     target = self.runtime.pending_jump
                     self.runtime.pending_jump = None
                     if target == "__break__" or target == "__continue__":
                         return
-                    if self._return_stack:
-                        label, resume_idx = self._return_stack.pop()
+                    if self._call_stack:
+                        label, resume_idx = self._call_stack.pop()
                         _log("I", "return", f"-> {label}[{resume_idx}]")
                         self._exec_label(label, resume_from=resume_idx)
                         return
                     self._exec_label(target)
                     return
-                # 否则继续执行
                 i += 1
                 continue
 
@@ -262,12 +259,9 @@ class GameRunner:
     def _exec_stmt(self, stmt):
         import core.ast as ast_mod
 
-        if isinstance(stmt, ast_mod.DefineCharacterStmt):
-            _log("I", "char", f"define {stmt.name}")
-            self.interp._execute(stmt)
+        self.interp._execute(stmt)
 
-        elif isinstance(stmt, ast_mod.BgStmt):
-            self.interp._execute(stmt)
+        if isinstance(stmt, ast_mod.BgStmt):
             resolved = self._resolve_resource_path(stmt.path, as_data_url=True) if stmt.path else ""
             self._ui_call("setBackground", resolved)
 
@@ -275,55 +269,21 @@ class GameRunner:
             self._show_dialogue(stmt.character, stmt.text)
 
         elif isinstance(stmt, ast_mod.InteractStmt):
-            _log("I", "interact", [a.name for a in stmt.actions])
             self._exec_interact(stmt.actions, stmt.fallbacks)
-
-        elif isinstance(stmt, ast_mod.LabelStmt):
-            self.runtime.current_label = stmt.name
-
-        elif isinstance(stmt, ast_mod.JumpStmt):
-            self.interp._execute(stmt)
 
         elif isinstance(stmt, ast_mod.CallStmt):
             if stmt.condition and not self.interp._eval_expr(stmt.condition):
                 return
-            caller = (self.runtime.current_label, self._current_index + 1)
-            self._return_stack.append(caller)
+            caller = (self.runtime.current_label, self._current_stmt_index + 1)
+            self._call_stack.append(caller)
             _log("I", "call", f"push {caller}, jump to {stmt.target}")
-            self.interp._execute(stmt)
 
         elif isinstance(stmt, ast_mod.ReturnStmt):
-            _log("I", "return", f"return_stack={self._return_stack}")
-            if self._return_stack:
-                label, resume_idx = self._return_stack.pop()
+            _log("I", "return", f"call_stack={self._call_stack}")
+            if self._call_stack:
+                label, resume_idx = self._call_stack.pop()
                 self.runtime.pending_jump = label
                 _log("I", "return", f"will resume at {label}[{resume_idx}]")
-
-        elif isinstance(stmt, ast_mod.VarStmt):
-            val = self.interp._eval_expr(stmt.value) if stmt.value else None
-            _log("I", "var", f"{stmt.name} = {val}")
-            self.runtime.set(stmt.name, val)
-
-        elif isinstance(stmt, ast_mod.BreakStmt):
-            self.runtime.set_jump("__break__")
-
-        elif isinstance(stmt, ast_mod.ContinueStmt):
-            self.runtime.set_jump("__continue__")
-
-        elif isinstance(stmt, ast_mod.SetStmt):
-            value = self.interp._eval_expr(stmt.value)
-            current = self.runtime.get(stmt.name)
-            _log("I", "set", f"{stmt.name} {stmt.operator} {value}")
-            if stmt.operator == "=":
-                self.runtime.set(stmt.name, value)
-            elif stmt.operator == "+=":
-                self.runtime.set(stmt.name, (current or 0) + value)
-            elif stmt.operator == "-=":
-                self.runtime.set(stmt.name, (current or 0) - value)
-            elif stmt.operator == "*=":
-                self.runtime.set(stmt.name, (current or 0) * value)
-            elif stmt.operator == "/=":
-                self.runtime.set(stmt.name, (current or 1) / value if value else (current or 1))
 
         elif isinstance(stmt, ast_mod.InputStmt):
             user_text = self._wait_for_input(stmt.prompt)
@@ -331,25 +291,10 @@ class GameRunner:
             _log("I", "input", f"stored {stmt.name}={user_text}")
 
         elif isinstance(stmt, ast_mod.IfStmt):
-            for branch in stmt.branches:
-                if self.interp._eval_expr(branch.condition):
-                    self._exec_block(branch.body)
-                    return
-            if stmt.else_body:
-                self._exec_block(stmt.else_body)
+            pass
 
         elif isinstance(stmt, ast_mod.WhileStmt):
-            while self.interp._eval_expr(stmt.condition) and self.runtime.running:
-                self._exec_block(stmt.body)
-                if self.runtime.pending_jump == "__break__":
-                    self.runtime.pending_jump = None
-                    return
-                if self.runtime.pending_jump == "__continue__":
-                    self.runtime.pending_jump = None
-                if self.runtime.pending_jump:
-                    return
-                if not self.runtime.running:
-                    return
+            pass
 
         elif isinstance(stmt, ast_mod.WaitStmt):
             if stmt.is_click:
@@ -359,35 +304,35 @@ class GameRunner:
                 time.sleep(stmt.duration)
 
         elif isinstance(stmt, ast_mod.SaveStmt):
-            self.runtime.pending_save = True
+            pass
 
         elif isinstance(stmt, ast_mod.LoadStmt):
-            self.runtime.pending_load = True
+            pass
 
         elif isinstance(stmt, ast_mod.QuitStmt):
-            self.runtime.pending_quit = True
+            pass
 
         elif isinstance(stmt, ast_mod.PythonBlockStmt):
-            _log("I", "python", stmt.code[:60])
-            try:
-                exec(stmt.code, self._python_scope)
-            except Exception as e:
-                _log("E", "python", str(e))
-                raise
             if self.runtime.pending_jump:
                 _log("I", "python", f"jump -> {self.runtime.pending_jump}")
 
         elif isinstance(stmt, ast_mod.IncludeStmt):
-            self._exec_include(stmt.path)
+            self._last_include_stmt = stmt
+            self._exec_include()
 
-    def _exec_include(self, path: str):
+    def _exec_include(self):
+        import core.ast as ast_mod
+        stmt = self._last_include_stmt
+        if not stmt:
+            return
+
         if self._script_dir:
-            target = self._script_dir / path
+            target = self._script_dir / stmt.path
         else:
-            target = Path(path)
+            target = Path(stmt.path)
 
         if not target.exists():
-            self._show_dialogue(None, f"[错误] 无法加载脚本: {path}")
+            self._show_dialogue(None, f"[错误] 无法加载脚本: {stmt.path}")
             return
 
         _log("I", "include", f"loading {target}")
@@ -438,6 +383,7 @@ class GameRunner:
                 fb = random.choice(fb_texts) if fb_texts else "..."
                 _log("I", "interact", f"fallback: {fb}")
                 self._show_dialogue(None, fb)
+                self._ui_call("handleInteract", "你想做什么？", fb_texts)
 
     def _match_action(self, user_text: str, actions: list):
         if self.interp.ai_engine and self.interp.ai_engine.provider != "keyword":
@@ -452,8 +398,7 @@ class GameRunner:
                     if a.name == matched_name:
                         return a
             else:
-                _log("I", "ai_match", f"no match")
-                return None
+                _log("I", "ai_match", f"no match, fallback to fuzzywuzzy")
 
         from fuzzywuzzy import fuzz
         best_score = 0
@@ -515,7 +460,7 @@ class GameRunner:
             success = self.runtime.load_game(save_data)
             if success:
                 _log("I", "load", f"loaded from {save_path}")
-                self._return_stack.clear()
+                self._call_stack.clear()
                 self.runtime.clear_pending()
                 self.runtime.running = True
                 self._ui_call("showSaveMessage", f"已加载存档 [{slot}]")
@@ -762,7 +707,16 @@ class LauncherApi:
         game_runner._running = True
         game_runner.load_script(script_path)
         game_runner.runtime.running = True
-        game_runner.interp = Interpreter(runtime=game_runner.runtime, ai_config={"provider": ai_provider}, script_dir=game_runner._script_dir)
+        ai_config = {"provider": ai_provider}
+        models = config_store.get_ai_models()
+        for m in models:
+            if m.get("provider") == ai_provider:
+                ai_config["model"] = m.get("model", "")
+                ai_config["api_key"] = m.get("api_key", "")
+                if m.get("base_url"):
+                    ai_config["url"] = m["base_url"]
+                break
+        game_runner.interp = Interpreter(runtime=game_runner.runtime, ai_config=ai_config, script_dir=game_runner._script_dir)
         game_runner.interp._collect_labels(game_runner.program)
         game_runner._python_scope["qf"] = game_runner.interp.qf_ctx
 

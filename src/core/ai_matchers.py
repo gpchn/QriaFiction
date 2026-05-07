@@ -6,13 +6,32 @@ class AIMatcher:
         raise NotImplementedError
 
     def _parse(self, response: str) -> str | None:
-        text = response.strip().strip('"').strip("'").upper()
-        if text == "NONE":
+        text = response.strip()
+
+        if not text or text.upper() in ("NONE", "NULL", "NO_MATCH", "NO MATCH", "N/A", "无", "无匹配"):
             return None
-        for action in actions if hasattr(self, '_last_actions') else []:
-            if action.name.upper() == text:
+
+        text = text.strip('"').strip("'").strip()
+
+        if text.startswith("```"):
+            lines = text.split("\n")
+            for line in lines:
+                line = line.strip().strip("```").strip()
+                if line and not line.startswith("json") and not line.startswith("text"):
+                    text = line
+                    break
+
+        for action in getattr(self, '_last_actions', []):
+            name_upper = action.name.upper()
+            if text.upper() == name_upper:
                 return action.name
-        return text if text else None
+            if name_upper in text.upper() and len(text) < len(action.name) + 10:
+                return action.name
+
+        if text and len(text) < 50:
+            return text
+
+        return None
 
 
 class OpenAIMatcher(AIMatcher):

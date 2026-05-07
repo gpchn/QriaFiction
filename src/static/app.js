@@ -164,10 +164,18 @@ window.addEventListener('pywebviewready', () => {
 
             function enableInput(yes) {
                 gameInputEnabled.value = yes;
-                if (yes) nextTick(() => {
-                    const el = document.querySelector('#app input[type="text"]');
-                    if (el) el.focus();
-                });
+                const tryFocus = (retries = 3) => {
+                    if (retries <= 0) return;
+                    nextTick(() => {
+                        const el = document.querySelector('#app input[type="text"]');
+                        if (el && el.offsetParent !== null) {
+                            try { el.focus(); } catch {}
+                        } else {
+                            setTimeout(() => tryFocus(retries - 1), 50);
+                        }
+                    });
+                };
+                if (yes) tryFocus();
             }
 
             async function sendInput() {
@@ -328,7 +336,9 @@ window.addEventListener('pywebviewready', () => {
             watch(messages, () => {
                 nextTick(() => {
                     const el = msgContainer.value;
-                    if (el) el.scrollTop = el.scrollHeight;
+                    if (el && el.offsetParent !== null) {
+                        try { el.scrollTop = el.scrollHeight; } catch {}
+                    }
                 });
             }, { deep: true });
 
