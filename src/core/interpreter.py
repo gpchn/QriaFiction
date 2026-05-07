@@ -5,6 +5,7 @@ from core.ast import *
 from core.runtime import Runtime
 from core.ai_engine import AIEngine
 from core.errors import RuntimeError as QFRuntimeError
+from core.text_utils import interpolate_text
 
 
 class QriaContext:
@@ -97,19 +98,12 @@ class Interpreter:
             i += 1
 
     def _interpolate(self, text: str) -> str:
-        import re
-        def replacer(match):
-            var_name = match.group(1).strip()
-            if var_name.startswith("python:"):
-                code = var_name[len("python:"):].strip()
-                scope = {"qf": self.qf_ctx}
-                try:
-                    return str(eval(code, scope))
-                except:
-                    return match.group(0)
-            val = self.runtime.get(var_name)
-            return str(val) if val is not None else ""
-        return re.sub(r"\{([^}]+)\}", replacer, text)
+        return interpolate_text(
+            text=text,
+            get_var_func=self.runtime.get,
+            python_scope=None,
+            qf_ctx=self.qf_ctx,
+        )
 
     def _execute(self, stmt: Stmt):
         if isinstance(stmt, DefineCharacterStmt):

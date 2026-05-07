@@ -9,6 +9,7 @@ from core.lexer import Lexer
 from core.parser import Parser
 from core.interpreter import Interpreter
 from core.runtime import Runtime
+from core.text_utils import interpolate_text_with_logging
 
 
 def _log(level, tag, *args):
@@ -37,6 +38,8 @@ class GameRunner:
         self._python_scope = {}
         self._running = False
         self._lock = threading.Lock()
+        self._return_stack = []
+        self._current_index = 0
 
     def is_running(self):
         return self._running
@@ -58,6 +61,8 @@ class GameRunner:
             self.user_input_value = ""
             self.continue_event.clear()
             self._python_scope = {}
+            self._return_stack = []
+            self._current_index = 0
 
     def load_script(self, path: str):
         _log("I", "load", f"path={path}")
@@ -75,20 +80,14 @@ class GameRunner:
             self.window.evaluate_js(f"{method}({js_args})")
 
     def _interpolate_text(self, text: str) -> str:
-        import re
-        def replacer(match):
-            var_name = match.group(1).strip()
-            if var_name.startswith("python:"):
-                code = var_name[len("python:"):].strip()
-                scope = {**self._python_scope, "qf": self.interp.qf_ctx}
-                try:
-                    return str(eval(code, scope))
-                except:
-                    return match.group(0)
-            val = self.runtime.get(var_name)
-            _log("D", "interp", f"{{{var_name}}} -> {val!r}")
-            return str(val) if val is not None else ""
-        return re.sub(r"\{([^}]+)\}", replacer, text)
+        qf_ctx = self.interp.qf_ctx if self.interp else None
+        return interpolate_text_with_logging(
+            text=text,
+            get_var_func=self.runtime.get,
+            python_scope=self._python_scope,
+            qf_ctx=qf_ctx,
+            log_func=_log,
+        )
 
     def _show_dialogue(self, char_name, text):
         if char_name:
@@ -148,18 +147,19 @@ class GameRunner:
         else:
             self._exec_block(self.program.statements)
 
-    def _exec_label(self, label_name: str):
-        _log("I", "label", label_name)
+    def _exec_label(self, label_name: str, resume_from: int = 0):
+        _log("I", "label", f"{label_name} (resume={resume_from})")
         if label_name not in self.interp.labels:
             self._show_dialogue(None, f"[错误] 未知标签: {label_name}")
             return
         self.runtime.current_label = label_name
-        self._exec_block(self.interp.labels[label_name])
+        self._exec_block(self.interp.labels[label_name], resume_from=resume_from)
 
-    def _exec_block(self, statements: list):
+    def _exec_block(self, statements: list, resume_from: int = 0):
         import core.ast as ast_mod
-        i = 0
+        i = resume_from
         while i < len(statements) and self.runtime.running:
+            self._current_index = i
             stmt = statements[i]
             _log("D", "exec", f"[{i}] {type(stmt).__name__}")
 
@@ -172,6 +172,11 @@ class GameRunner:
                 target = self.runtime.pending_jump
                 self.runtime.pending_jump = None
                 if target == "__break__" or target == "__continue__":
+                    return
+                if self._return_stack:
+                    label, resume_idx = self._return_stack.pop()
+                    _log("I", "return", f"-> {label}[{resume_idx}]")
+                    self._exec_label(label, resume_from=resume_idx)
                     return
                 self._exec_label(target)
                 return
@@ -222,13 +227,17 @@ class GameRunner:
         elif isinstance(stmt, ast_mod.CallStmt):
             if stmt.condition and not self.interp._eval_expr(stmt.condition):
                 return
-            self.runtime.call_stack.append(self.runtime.current_label)
+            caller = (self.runtime.current_label, self._current_index + 1)
+            self._return_stack.append(caller)
+            _log("I", "call", f"push {caller}, jump to {stmt.target}")
             self.runtime.set_jump(stmt.target)
 
         elif isinstance(stmt, ast_mod.ReturnStmt):
-            if self.runtime.call_stack:
-                caller = self.runtime.call_stack.pop()
-                self.runtime.set_jump(caller)
+            _log("I", "return", f"return_stack={self._return_stack}")
+            if self._return_stack:
+                label, resume_idx = self._return_stack.pop()
+                self.runtime.pending_jump = label
+                _log("I", "return", f"will resume at {label}[{resume_idx}]")
 
         elif isinstance(stmt, ast_mod.VarStmt):
             if stmt.value:
@@ -331,44 +340,21 @@ class GameRunner:
                 self._ui_call("handleInteract", "", action_data, fallbacks)
 
     def _match_action(self, user_text: str, actions: list):
+        from fuzzywuzzy import fuzz
         best_score = 0
         best_action = None
-        user_lower = user_text.lower()
         for action in actions:
-            text = action.desc.lower()
-            score = self._fzf_score(user_lower, text)
+            score_name = fuzz.partial_ratio(user_text, action.name)
+            score_desc = fuzz.partial_ratio(user_text, action.desc)
+            score = max(score_name, score_desc)
             if score > best_score:
                 best_score = score
                 best_action = action
-        threshold = len(user_lower) * 3
-        if best_score >= threshold:
-            _log("I", "match", f"score={best_score}/{threshold} -> {best_action.name}")
+        if best_score >= 65:
+            _log("I", "match", f"score={best_score} -> {best_action.name}")
             return best_action
-        _log("I", "match", f"score={best_score} < {threshold}, no match")
+        _log("I", "match", f"score={best_score} < 65, no match")
         return None
-
-    def _fzf_score(self, query: str, text: str) -> int:
-        qi = 0
-        score = 0
-        last_idx = -1
-        consecutive = 0
-        for i, ch in enumerate(text):
-            if qi < len(query) and ch == query[qi]:
-                bonus = 0
-                if i == last_idx + 1:
-                    consecutive += 1
-                    bonus += consecutive * 2
-                else:
-                    consecutive = 1
-                    bonus = 1
-                if i == 0 or text[i-1] in " _-，。、/\\·":
-                    bonus += 3
-                score += bonus
-                last_idx = i
-                qi += 1
-        if qi < len(query):
-            return 0
-        return score
 
     def submit_input(self, text: str):
         _log("D", "submit", f"text={text}")

@@ -235,10 +235,6 @@ window.addEventListener('pywebviewready', () => {
             };
             window.showContinue = () => {
                 showContinueHint.value = true;
-                nextTick(() => {
-                    const el = msgContainer.value;
-                    if (el) el.scrollTop = el.scrollHeight;
-                });
             };
 
             watch(messages, () => {
