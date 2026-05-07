@@ -11,16 +11,30 @@ from core.interpreter import Interpreter
 from core.runtime import Runtime
 
 
+def _log(level, tag, *args):
+    msg = " ".join(str(a) for a in args)
+    colors = {"D": "\033[90m", "I": "\033[36m", "W": "\033[33m", "E": "\033[31m"}
+    reset = "\033[0m"
+    c = colors.get(level, "")
+    print(f"{c}[{level}][{tag}]{reset} {msg}")
+    if level == "E":
+        app_logger.error(f"[{tag}] {msg}")
+    elif level == "W":
+        app_logger.warn(f"[{tag}] {msg}")
+    else:
+        app_logger.debug(f"[{tag}] {msg}")
+
+
 class GameRunner:
     def __init__(self):
         self.runtime = Runtime()
         self.interp = None
         self.program = None
         self.window = None
-        self.pending_events = []
         self.user_input_event = threading.Event()
-        self.current_actions = []
-        self.current_fallbacks = []
+        self.user_input_value = ""
+        self.continue_event = threading.Event()
+        self._python_scope = {}
         self._running = False
         self._lock = threading.Lock()
 
@@ -28,35 +42,53 @@ class GameRunner:
         return self._running
 
     def stop(self):
+        _log("I", "stop", "called")
         self._running = False
-        if self.runtime:
-            self.runtime.running = False
-            self.user_input_event.set()
+        self.runtime.running = False
+        self.user_input_event.set()
+        self.continue_event.set()
 
     def reset(self):
         with self._lock:
+            _log("I", "reset", "called")
             self.runtime = Runtime()
             self.interp = None
             self.program = None
-            self.pending_events = []
             self.user_input_event.clear()
-            self.current_actions = []
-            self.current_fallbacks = []
+            self.user_input_value = ""
+            self.continue_event.clear()
+            self._python_scope = {}
 
     def load_script(self, path: str):
+        _log("I", "load", f"path={path}")
         src = Path(path).read_text(encoding="utf-8")
         lexer = Lexer(src, path)
         tokens = lexer.tokenize()
+        _log("I", "load", f"tokens={len(tokens)}")
         parser = Parser(tokens, path)
         self.program = parser.parse()
-        self.interp = Interpreter(runtime=self.runtime, ai_config={"provider": "keyword"})
-        self.interp._collect_labels(self.program)
+        _log("I", "load", f"statements={len(self.program.statements)}")
 
     def _ui_call(self, method, *args):
         if self.window:
-            self.window.evaluate_js(
-                f"{method}({', '.join(json.dumps(a, ensure_ascii=False) for a in args)})"
-            )
+            js_args = ", ".join(json.dumps(a, ensure_ascii=False) for a in args)
+            self.window.evaluate_js(f"{method}({js_args})")
+
+    def _interpolate_text(self, text: str) -> str:
+        import re
+        def replacer(match):
+            var_name = match.group(1).strip()
+            if var_name.startswith("python:"):
+                code = var_name[len("python:"):].strip()
+                scope = {**self._python_scope, "qf": self.interp.qf_ctx}
+                try:
+                    return str(eval(code, scope))
+                except:
+                    return match.group(0)
+            val = self.runtime.get(var_name)
+            _log("D", "interp", f"{{{var_name}}} -> {val!r}")
+            return str(val) if val is not None else ""
+        return re.sub(r"\{([^}]+)\}", replacer, text)
 
     def _show_dialogue(self, char_name, text):
         if char_name:
@@ -69,164 +101,115 @@ class GameRunner:
             color = ""
             avatar = ""
         msg_type = "system" if not name else "character"
+        text = self._interpolate_text(text)
+        _log("I", "dialogue", f"[{msg_type}]{name}: {text[:60]}")
         self._ui_call("addMessage", msg_type, text, name, color, avatar)
+        self._wait_for_continue()
 
-    def _show_user_message(self, text):
-        self._ui_call("addMessage", "user", text, "你", "", "")
+    def _wait_for_continue(self):
+        self._ui_call("showContinue")
+        self.continue_event.wait()
+        self.continue_event.clear()
 
-    def _show_fallback(self, text):
-        self._ui_call("addMessage", "system", text)
-
-    def _set_background(self, path):
-        self._ui_call("setBackground", path or "")
-
-    def _set_status(self, text):
-        self._ui_call("setStatus", text)
-
-    def _get_user_input(self, prompt):
+    def _wait_for_input(self, prompt):
+        _log("I", "input", f"prompt={prompt}")
         self._ui_call("getUserInput", prompt)
         self.user_input_event.wait()
         self.user_input_event.clear()
-        return self.pending_events.pop(0) if self.pending_events else ""
-
-    def _start_interact(self, actions, fallbacks):
-        self.current_actions = actions
-        self.current_fallbacks = fallbacks
-        action_data = [{"name": a.name, "desc": a.desc} for a in actions]
-        self._ui_call("handleInteract", "", action_data, fallbacks)
-
-    def _jump_to(self, label):
-        if label in self.interp.labels:
-            self._execute_block_safe(self.interp.labels[label])
+        val = self.user_input_value
+        self.user_input_value = ""
+        _log("I", "input", f"got={val}")
+        return val
 
     def start_game(self, script_path: str, ai_provider: str):
+        _log("I", "start", f"path={script_path} provider={ai_provider}")
         self._running = True
         self.reset()
         self.load_script(script_path)
-        self.runtime.variables.clear()
-        self.runtime.background = None
-        self.runtime.pending_dialogues = []
-        self.runtime.pending_input = None
-        self.runtime.pending_interact = None
-        self.runtime.pending_quit = False
         self.runtime.running = True
         self.interp = Interpreter(runtime=self.runtime, ai_config={"provider": ai_provider})
         self.interp._collect_labels(self.program)
-        self._run_main()
+        self._run_program()
+        _log("I", "start", "finished")
         self._running = False
 
-    def _run_main(self):
-        if "start" in self.interp.labels:
-            self._execute_block_safe(self.interp.labels["start"])
-        else:
-            self._execute_block_safe(self.program.statements)
+    def _run_program(self):
+        import core.ast as ast_mod
 
-    def _execute_block_safe(self, statements):
+        for stmt in self.program.statements:
+            if isinstance(stmt, ast_mod.LabelStmt):
+                continue
+            self._exec_stmt(stmt)
+            if not self.runtime.running:
+                return
+
+        if "start" in self.interp.labels:
+            self._exec_label("start")
+        else:
+            self._exec_block(self.program.statements)
+
+    def _exec_label(self, label_name: str):
+        _log("I", "label", label_name)
+        if label_name not in self.interp.labels:
+            self._show_dialogue(None, f"[错误] 未知标签: {label_name}")
+            return
+        self.runtime.current_label = label_name
+        self._exec_block(self.interp.labels[label_name])
+
+    def _exec_block(self, statements: list):
         import core.ast as ast_mod
         i = 0
         while i < len(statements) and self.runtime.running:
+            stmt = statements[i]
+            _log("D", "exec", f"[{i}] {type(stmt).__name__}")
+
+            self._exec_stmt(stmt)
+
+            if not self.runtime.running:
+                return
+
             if self.runtime.pending_jump:
                 target = self.runtime.pending_jump
                 self.runtime.pending_jump = None
-                self.runtime.current_label = target
                 if target == "__break__" or target == "__continue__":
                     return
-                if target in self.interp.labels:
-                    self._execute_block_safe(self.interp.labels[target])
-                    return
-                else:
-                    self._show_fallback(f"未知标签: {target}")
-                    return
-
-            stmt = statements[i]
-            self._process_stmt(stmt)
-
-            if self.runtime.pending_jump:
-                continue
-
-            if self.runtime.pending_dialogues:
-                for d in self.runtime.pending_dialogues:
-                    self._show_dialogue(d["character"], d["text"])
-                self.runtime.pending_dialogues = []
-
-            if self.runtime.pending_input:
-                prompt = self.runtime.pending_input["prompt"]
-                name = self.runtime.pending_input["name"]
-                self.runtime.pending_input = None
-                user_text = self._get_user_input(prompt)
-                self._show_user_message(user_text)
-                self.runtime.set(name, user_text)
-                continue
-
-            if self.runtime.pending_interact:
-                actions = self.runtime.pending_interact["actions"]
-                fallbacks = self.runtime.pending_interact["fallbacks"]
-                self.runtime.pending_interact = None
-                matched = self._run_interact_loop(actions, fallbacks)
-                if not matched:
-                    return
+                self._exec_label(target)
+                return
 
             if self.runtime.pending_quit:
-                self._show_fallback("故事结束")
+                self._show_dialogue(None, "故事结束")
                 self.runtime.running = False
                 return
 
             i += 1
 
-    def _run_interact_loop(self, actions, fallbacks) -> bool:
-        self._start_interact(actions, fallbacks)
-        self.user_input_event.wait()
-        self.user_input_event.clear()
-        if not self.pending_events:
-            return False
-
-        user_text = self.pending_events.pop(0)
-        if not user_text:
-            return False
-
-        self._show_user_message(user_text)
-        self.runtime.set("_user_input", user_text)
-
-        available = [a for a in actions if not a.condition or self.interp._eval_expr(a.condition)]
-
-        matched = None
-        user_lower = user_text.lower()
-        for action in available:
-            keywords = action.desc.lower().split()
-            if any(kw in user_lower for kw in keywords if len(kw) > 1):
-                matched = action
-                break
-
-        if matched:
-            self.runtime.set("_matched_action", matched.name)
-            self.current_actions = []
-            self.current_fallbacks = []
-            self._jump_to(matched.label)
-            return True
-        else:
-            import random
-            fb = random.choice(fallbacks) if fallbacks else "..."
-            self._show_fallback(fb)
-            return self._run_interact_loop(actions, fallbacks)
-
-    def _process_stmt(self, stmt):
+    def _exec_stmt(self, stmt):
         import core.ast as ast_mod
+
         if isinstance(stmt, ast_mod.DefineCharacterStmt):
             from core.runtime import Character
+            _log("I", "char", f"define {stmt.name}")
             self.runtime.add_character(stmt.name, Character(
                 name=stmt.display_name,
                 avatar=stmt.avatar,
                 color=stmt.color,
             ))
+
         elif isinstance(stmt, ast_mod.BgStmt):
+            _log("I", "bg", stmt.path)
             self.runtime.background = stmt.path
-            self._set_background(stmt.path)
+            self._ui_call("setBackground", stmt.path or "")
+
         elif isinstance(stmt, ast_mod.DialogueStmt):
-            self.runtime.queue_dialogue(stmt.character, stmt.text)
+            self._show_dialogue(stmt.character, stmt.text)
+
         elif isinstance(stmt, ast_mod.InteractStmt):
-            self.runtime.queue_interact(actions=stmt.actions, fallbacks=stmt.fallbacks)
+            _log("I", "interact", [a.name for a in stmt.actions])
+            self._exec_interact(stmt.actions, stmt.fallbacks)
+
         elif isinstance(stmt, ast_mod.LabelStmt):
-            pass
+            self.runtime.current_label = stmt.name
+
         elif isinstance(stmt, ast_mod.JumpStmt):
             if stmt.is_otherwise:
                 self.runtime.set_jump(stmt.target)
@@ -235,27 +218,30 @@ class GameRunner:
                     self.runtime.set_jump(stmt.target)
             else:
                 self.runtime.set_jump(stmt.target)
+
         elif isinstance(stmt, ast_mod.CallStmt):
             if stmt.condition and not self.interp._eval_expr(stmt.condition):
                 return
             self.runtime.call_stack.append(self.runtime.current_label)
             self.runtime.set_jump(stmt.target)
+
         elif isinstance(stmt, ast_mod.ReturnStmt):
             if self.runtime.call_stack:
                 caller = self.runtime.call_stack.pop()
                 self.runtime.set_jump(caller)
+
         elif isinstance(stmt, ast_mod.VarStmt):
-            if stmt.name == "__break__":
-                self.runtime.set_jump("__break__")
-            elif stmt.name == "__continue__":
-                self.runtime.set_jump("__continue__")
-            elif stmt.value:
-                self.runtime.set(stmt.name, self.interp._eval_expr(stmt.value))
+            if stmt.value:
+                val = self.interp._eval_expr(stmt.value)
+                _log("I", "var", f"{stmt.name} = {val}")
+                self.runtime.set(stmt.name, val)
             else:
                 self.runtime.set(stmt.name, None)
+
         elif isinstance(stmt, ast_mod.SetStmt):
             value = self.interp._eval_expr(stmt.value)
             current = self.runtime.get(stmt.name)
+            _log("I", "set", f"{stmt.name} {stmt.operator} {value}")
             if stmt.operator == "=":
                 self.runtime.set(stmt.name, value)
             elif stmt.operator == "+=":
@@ -265,22 +251,133 @@ class GameRunner:
             elif stmt.operator == "*=":
                 self.runtime.set(stmt.name, (current or 0) * value)
             elif stmt.operator == "/=":
-                current = current or 1
-                self.runtime.set(stmt.name, current / value)
+                self.runtime.set(stmt.name, (current or 1) / value)
+
         elif isinstance(stmt, ast_mod.InputStmt):
-            self.runtime.queue_input_prompt(stmt.name, stmt.prompt)
+            user_text = self._wait_for_input(stmt.prompt)
+            self.runtime.set(stmt.name, user_text)
+            _log("I", "input", f"stored {stmt.name}={user_text}")
+
+        elif isinstance(stmt, ast_mod.IfStmt):
+            for branch in stmt.branches:
+                if self.interp._eval_expr(branch.condition):
+                    self._exec_block(branch.body)
+                    return
+            if stmt.else_body:
+                self._exec_block(stmt.else_body)
+
+        elif isinstance(stmt, ast_mod.WhileStmt):
+            while self.interp._eval_expr(stmt.condition) and self.runtime.running:
+                self._exec_block(stmt.body)
+                if self.runtime.pending_jump == "__break__":
+                    self.runtime.pending_jump = None
+                    return
+                if self.runtime.pending_jump == "__continue__":
+                    self.runtime.pending_jump = None
+                if self.runtime.pending_jump:
+                    return
+                if not self.runtime.running:
+                    return
+
         elif isinstance(stmt, ast_mod.WaitStmt):
-            pass
+            import time
+            if isinstance(stmt.duration, (int, float)):
+                time.sleep(stmt.duration)
+
         elif isinstance(stmt, ast_mod.QuitStmt):
             self.runtime.pending_quit = True
+
         elif isinstance(stmt, ast_mod.PythonBlockStmt):
-            self.interp._execute_python(stmt.code)
+            _log("I", "python", stmt.code[:60])
+            self._python_scope["qf"] = self.interp.qf_ctx
+            try:
+                exec(stmt.code, self._python_scope)
+            except Exception as e:
+                _log("E", "python", str(e))
+                raise
+            if self.runtime.pending_jump:
+                _log("I", "python", f"jump -> {self.runtime.pending_jump}")
+
         elif isinstance(stmt, ast_mod.IncludeStmt):
             pass
 
-    def submit_input(self, text):
-        self.pending_events.append(text)
+    def _exec_interact(self, actions, fallbacks):
+        _log("I", "interact", [a.name for a in actions])
+        available = [a for a in actions if not a.condition or self.interp._eval_expr(a.condition)]
+        action_data = [{"name": a.name, "desc": a.desc, "label": a.label} for a in available]
+        self._ui_call("handleInteract", "", action_data, fallbacks)
+
+        while self.runtime.running:
+            self.user_input_event.wait()
+            self.user_input_event.clear()
+            user_text = self.user_input_value
+            self.user_input_value = ""
+
+            if not user_text:
+                continue
+
+            matched = self._match_action(user_text, available)
+            if matched:
+                _log("I", "interact", f"matched: {matched.name} -> {matched.label}")
+                self.runtime.set("_user_input", user_text)
+                self.runtime.set("_matched_action", matched.name)
+                self.runtime.set_jump(matched.label)
+                return
+            else:
+                import random
+                fb = random.choice(fallbacks) if fallbacks else "..."
+                _log("I", "interact", f"fallback: {fb}")
+                self._show_dialogue(None, fb)
+                self._ui_call("handleInteract", "", action_data, fallbacks)
+
+    def _match_action(self, user_text: str, actions: list):
+        best_score = 0
+        best_action = None
+        user_lower = user_text.lower()
+        for action in actions:
+            text = action.desc.lower()
+            score = self._fzf_score(user_lower, text)
+            if score > best_score:
+                best_score = score
+                best_action = action
+        threshold = len(user_lower) * 3
+        if best_score >= threshold:
+            _log("I", "match", f"score={best_score}/{threshold} -> {best_action.name}")
+            return best_action
+        _log("I", "match", f"score={best_score} < {threshold}, no match")
+        return None
+
+    def _fzf_score(self, query: str, text: str) -> int:
+        qi = 0
+        score = 0
+        last_idx = -1
+        consecutive = 0
+        for i, ch in enumerate(text):
+            if qi < len(query) and ch == query[qi]:
+                bonus = 0
+                if i == last_idx + 1:
+                    consecutive += 1
+                    bonus += consecutive * 2
+                else:
+                    consecutive = 1
+                    bonus = 1
+                if i == 0 or text[i-1] in " _-，。、/\\·":
+                    bonus += 3
+                score += bonus
+                last_idx = i
+                qi += 1
+        if qi < len(query):
+            return 0
+        return score
+
+    def submit_input(self, text: str):
+        _log("D", "submit", f"text={text}")
+        self.user_input_value = text
         self.user_input_event.set()
+
+    def continue_game(self):
+        _log("D", "continue", "event set")
+        self.continue_event.set()
 
 
 game_runner = GameRunner()
@@ -317,6 +414,7 @@ class LauncherApi:
 
     @api_method
     def launch_project(self, project_id: str):
+        _log("I", "launch", f"project={project_id}")
         if ".." in project_id or "/" in project_id or "\\" in project_id:
             raise ApiError(400, "无效的项目ID")
         if game_runner.is_running():
@@ -327,11 +425,9 @@ class LauncherApi:
 
         script_path = proj.get("script_main", "")
         if not script_path or not Path(script_path).exists():
-            raise ApiError(404, f"主脚本不存在")
+            raise ApiError(404, "主脚本不存在")
 
-        display = proj.get("display", {})
         ai_provider = config_store.get("default_ai_provider", "keyword")
-
         self.current_project = proj
         self.current_view = "game"
         game_runner.window = webview.windows[0]
@@ -340,14 +436,18 @@ class LauncherApi:
             try:
                 game_runner.start_game(script_path, ai_provider)
             except Exception as e:
+                _log("E", "game", str(e))
                 app_logger.error(f"游戏运行错误: {e}")
-                game_runner._show_fallback(f"错误: {e}")
+                game_runner._show_dialogue(None, f"错误: {e}")
 
         threading.Thread(target=run_game, daemon=True).start()
         return True
 
     @api_method
     def return_to_launcher(self):
+        _log("I", "return", "called")
+        game_runner.stop()
+        game_runner.reset()
         self.current_view = "launcher"
         self.current_project = None
         return True
@@ -386,13 +486,18 @@ class LauncherApi:
         return True
 
     @api_method
+    def set_config_batch(self, updates_json: str):
+        updates = json.loads(updates_json)
+        config_store.set_batch(updates)
+        return True
+
+    @api_method
     def get_logs(self, limit: int = 200):
         return app_logger.get_logs(limit)
 
     @api_method
     def clear_data(self):
         from app.config import CONFIG_FILE, DATA_DIR
-        import shutil
         if CONFIG_FILE.exists():
             CONFIG_FILE.unlink()
         log_dir = DATA_DIR / "logs"
@@ -408,11 +513,13 @@ class LauncherApi:
         return True
 
     @api_method
-    def ai_match(self, user_input, actions, fallbacks):
-        available = []
-        for a in actions:
-            available.append({"name": a["name"], "desc": a["desc"]})
+    def continue_game(self):
+        game_runner.continue_game()
+        return True
 
+    @api_method
+    def ai_match(self, user_input, actions, fallbacks):
+        available = [{"name": a["name"], "desc": a["desc"]} for a in actions]
         matched = None
         user_lower = user_input.lower()
         for action in available:
@@ -420,7 +527,6 @@ class LauncherApi:
             if any(kw in user_lower for kw in keywords if len(kw) > 1):
                 matched = action["name"]
                 break
-
         if matched:
             return {"matched": matched}
         else:

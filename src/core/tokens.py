@@ -35,6 +35,7 @@ class TokenType(Enum):
     LOAD = auto()
     QUIT = auto()
     PYTHON = auto()
+    PYTHON_CODE = auto()
     INCLUDE = auto()
     END = auto()
     WITH = auto()

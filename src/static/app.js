@@ -66,14 +66,14 @@ window.addEventListener('pywebviewready', () => {
                     cfg.value.default_ai_provider = c.default_ai_provider || 'keyword';
                     cfg.value.window_width = c.window_width || 1000;
                     cfg.value.window_height = c.window_height || 700;
-                    if (c.theme === 'light') applyTheme(false);
-                } catch {}
+                    applyTheme((c.theme || 'dark') !== 'light');
+                } catch { applyTheme(true); }
             }
 
             function openImport() {
                 openModal('导入项目',
-                    '<label class="text-[11px] block mb-1.5" style="color:var(--fg-m)">ZIP 文件路径</label>' +
-                    '<input id="m-zip" class="w-full h-9 px-3 text-[12px] rounded" style="background:var(--s2);border:1px solid var(--line);color:var(--fg)" placeholder="C:\\path\\to\\project.zip">',
+                    '<label class="text-[13px] block mb-1.5" style="color:var(--fg-m)">ZIP 文件路径</label>' +
+                    '<input id="m-zip" class="w-full h-10 px-3 text-[14px] rounded" style="background:var(--s2);border:1px solid var(--line);color:var(--fg)" placeholder="C:\\path\\to\\project.zip">',
                     async () => {
                         const v = (document.getElementById('m-zip') || {}).value?.trim();
                         if (!v) { toast('请输入路径', 'error'); return; }
@@ -84,7 +84,7 @@ window.addEventListener('pywebviewready', () => {
 
             function askDelete(p) {
                 openModal('删除项目',
-                    '<p class="text-[12px]" style="color:var(--fg-m)">确定删除「' + (p.title || p.name) + '」？</p>',
+                    '<p class="text-[14px]" style="color:var(--fg-m)">确定删除「' + (p.title || p.name) + '」？</p>',
                     async () => {
                         try { ok(await pywebview.api.delete_project(p.id)); await loadProjects(); toast('已删除'); }
                         catch (e) { toast(e.message, 'error'); }
@@ -92,19 +92,26 @@ window.addEventListener('pywebviewready', () => {
             }
 
             async function launch(id) {
-                try { ok(await pywebview.api.launch_project(id)); view.value = 'game'; messages.value = []; }
+                try {
+                    const p = projects.value.find(x => x.id === id);
+                    gameProjectName.value = p ? (p.title || p.name) : '';
+                    ok(await pywebview.api.launch_project(id));
+                    view.value = 'game';
+                    messages.value = [];
+                    gameStatus.value = '运行中...';
+                }
                 catch (e) { toast(e.message, 'error'); }
             }
 
             function openAddModel() {
                 const inp = (id, ph, type) =>
-                    '<div><label class="text-[11px] block mb-1.5" style="color:var(--fg-m)">' + ph + '</label>' +
-                    '<input id="' + id + '" type="' + (type||'text') + '" class="w-full h-9 px-3 text-[12px] rounded" style="background:var(--s2);border:1px solid var(--line);color:var(--fg)" placeholder="' + ph + '"></div>';
+                    '<div><label class="text-[13px] block mb-1.5" style="color:var(--fg-m)">' + ph + '</label>' +
+                    '<input id="' + id + '" type="' + (type||'text') + '" class="w-full h-10 px-3 text-[14px] rounded" style="background:var(--s2);border:1px solid var(--line);color:var(--fg)" placeholder="' + ph + '"></div>';
                 openModal('添加模型',
                     '<div class="space-y-3">' +
                     inp('m-name', '名称') +
-                    '<div><label class="text-[11px] block mb-1.5" style="color:var(--fg-m)">提供商</label>' +
-                    '<select id="m-prov" class="w-full h-9 px-3 text-[12px] rounded" style="background:var(--s2);border:1px solid var(--line);color:var(--fg)">' +
+                    '<div><label class="text-[13px] block mb-1.5" style="color:var(--fg-m)">提供商</label>' +
+                    '<select id="m-prov" class="w-full h-10 px-3 text-[14px] rounded" style="background:var(--s2);border:1px solid var(--line);color:var(--fg)">' +
                     '<option value="openai">OpenAI</option><option value="deepseek">DeepSeek</option></select></div>' +
                     inp('m-model', '模型标识') +
                     inp('m-key', 'API Key', 'password') +
@@ -126,12 +133,12 @@ window.addEventListener('pywebviewready', () => {
 
             async function saveCfg() {
                 try {
-                    await Promise.all([
-                        pywebview.api.set_config('default_ai_provider', cfg.value.default_ai_provider),
-                        pywebview.api.set_config('window_width', cfg.value.window_width),
-                        pywebview.api.set_config('window_height', cfg.value.window_height),
-                        pywebview.api.set_config('theme', isDark.value ? 'dark' : 'light'),
-                    ]);
+                    await pywebview.api.set_config_batch(JSON.stringify({
+                        'default_ai_provider': cfg.value.default_ai_provider,
+                        'window_width': cfg.value.window_width,
+                        'window_height': cfg.value.window_height,
+                        'theme': isDark.value ? 'dark' : 'light',
+                    }));
                     toast('已保存');
                 } catch (e) { toast(e.message, 'error'); }
             }
@@ -141,12 +148,10 @@ window.addEventListener('pywebviewready', () => {
             const gameInputEnabled = ref(false);
             const gameInput = ref('');
             const gamePlaceholder = ref('输入...');
+            const gameProjectName = ref('');
             const messages = ref([]);
             const msgContainer = ref(null);
-
-            let inputCb = null;
-            let interactActions = null;
-            let interactFallbacks = null;
+            const showContinueHint = ref(false);
 
             function addMsg(type, text, name, color, avatar) {
                 messages.value.push({ type, text, name: name || '', color: color || '', avatar: avatar || '' });
@@ -155,8 +160,7 @@ window.addEventListener('pywebviewready', () => {
             function enableInput(yes) {
                 gameInputEnabled.value = yes;
                 if (yes) nextTick(() => {
-                    const el = document.querySelector('[v-if="view === \'game\'"] input[type="text"]') ||
-                               document.querySelector('.flex-1.overflow-y-auto + div input[type="text"]');
+                    const el = document.querySelector('#app input[type="text"]');
                     if (el) el.focus();
                 });
             }
@@ -167,30 +171,9 @@ window.addEventListener('pywebviewready', () => {
                 gameInput.value = '';
                 addMsg('user', t, '你', '', '');
                 enableInput(false);
-
-                if (inputCb) { inputCb(t); return; }
-
-                if (interactActions) {
-                    gameLoading.value = true;
-                    gameStatus.value = '分析中...';
-                    try {
-                        const r = ok(await pywebview.api.ai_match(t, interactActions, interactFallbacks));
-                        gameLoading.value = false;
-                        if (r && r.matched) {
-                            gameStatus.value = '已匹配';
-                            interactActions = null;
-                            interactFallbacks = null;
-                            await pywebview.api.on_action_matched(r);
-                        } else {
-                            if (r && r.fallback) addMsg('system', r.fallback);
-                            enableInput(true);
-                        }
-                    } catch (e) {
-                        gameLoading.value = false;
-                        addMsg('system', '错误: ' + e.message);
-                        enableInput(true);
-                    }
-                }
+                showContinueHint.value = false;
+                try { await pywebview.api.submit_input(t); }
+                catch (e) { console.error('submit_input error', e); }
             }
 
             async function backToLauncher() {
@@ -199,26 +182,64 @@ window.addEventListener('pywebviewready', () => {
                 messages.value = [];
                 gameStatus.value = '就绪';
                 gameInputEnabled.value = false;
+                gameProjectName.value = '';
+                showContinueHint.value = false;
                 await loadProjects();
             }
 
+            function onMsgAreaClick() {
+                if (showContinueHint.value) {
+                    showContinueHint.value = false;
+                    pywebview.api.continue_game();
+                }
+            }
+
+            function contrastColor(hex) {
+                if (!hex) return 'var(--fg-m)';
+                const r = parseInt(hex.slice(1,3), 16);
+                const g = parseInt(hex.slice(3,5), 16);
+                const b = parseInt(hex.slice(5,7), 16);
+                const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+                return lum > 0.5 ? '#000000' : '#ffffff';
+            }
+
+            function colorBubble(hex) {
+                if (!hex) return 'var(--s1)';
+                const r = parseInt(hex.slice(1,3), 16);
+                const g = parseInt(hex.slice(3,5), 16);
+                const b = parseInt(hex.slice(5,7), 16);
+                if (isDark.value) {
+                    const f = 0.15;
+                    return `rgba(${r},${g},${b},${f})`;
+                } else {
+                    const f = 0.12;
+                    const br = Math.round(r + (255 - r) * (1 - f));
+                    const bg = Math.round(g + (255 - g) * (1 - f));
+                    const bb = Math.round(b + (255 - b) * (1 - f));
+                    return `rgb(${br},${bg},${bb})`;
+                }
+            }
+
             window.addMessage = addMsg;
-            window.setBackground = (p) => {};
+            window.setBackground = () => {};
             window.setStatus = (t) => { gameStatus.value = t; };
             window.getUserInput = (prompt) => {
                 gameStatus.value = prompt;
                 gamePlaceholder.value = prompt;
                 enableInput(true);
-                return new Promise(resolve => { inputCb = v => { inputCb = null; resolve(v); }; });
             };
             window.handleInteract = (prompt, actions, fallbacks) => {
-                interactActions = actions;
-                interactFallbacks = fallbacks;
                 gameStatus.value = prompt || '你想做什么？';
                 gamePlaceholder.value = prompt || '输入...';
                 enableInput(true);
             };
-            window.sendGameInput = sendInput;
+            window.showContinue = () => {
+                showContinueHint.value = true;
+                nextTick(() => {
+                    const el = msgContainer.value;
+                    if (el) el.scrollTop = el.scrollHeight;
+                });
+            };
 
             watch(messages, () => {
                 nextTick(() => {
@@ -227,7 +248,9 @@ window.addEventListener('pywebviewready', () => {
                 });
             }, { deep: true });
 
-            onMounted(() => { Promise.all([loadProjects(), loadModels(), loadCfg()]); });
+            onMounted(() => {
+                Promise.all([loadProjects(), loadModels(), loadCfg()]);
+            });
 
             return {
                 view, page, isDark, tabs, currentPageTitle,
@@ -236,9 +259,10 @@ window.addEventListener('pywebviewready', () => {
                 toggleTheme, applyTheme,
                 openImport, askDelete, launch,
                 openAddModel, removeModel, saveCfg,
-                gameStatus, gameLoading, gameInputEnabled, gameInput, gamePlaceholder,
-                messages, msgContainer,
-                sendInput, backToLauncher,
+                gameStatus, gameLoading, gameInputEnabled, gameInput, gamePlaceholder, gameProjectName,
+                messages, msgContainer, showContinueHint,
+                sendInput, backToLauncher, onMsgAreaClick,
+                contrastColor, colorBubble,
             };
         },
     }).mount('#app');

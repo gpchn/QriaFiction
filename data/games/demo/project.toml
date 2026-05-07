@@ -1,0 +1,10 @@
+[project]
+title = "Demo Story"
+author = "QriaFiction"
+version = "0.1.0"
+
+[display]
+width = 900
+height = 680
+
+[characters]

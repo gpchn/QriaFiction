@@ -1,5 +1,6 @@
 import json
 import shutil
+import threading
 import toml
 import zipfile
 import tempfile
@@ -26,6 +27,7 @@ class ConfigStore:
 
     def __init__(self):
         self._path = CONFIG_FILE
+        self._lock = threading.Lock()
 
     def _read(self) -> dict:
         if self._path.exists():
@@ -41,7 +43,8 @@ class ConfigStore:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
     def get(self, key: str, default=None):
-        cfg = self._read()
+        with self._lock:
+            cfg = self._read()
         keys = key.split(".")
         val = cfg
         for k in keys:
@@ -52,34 +55,52 @@ class ConfigStore:
         return val if val is not None else default
 
     def get_all(self) -> dict:
-        cfg = self._read()
+        with self._lock:
+            cfg = self._read()
         return {**self._defaults, **cfg}
 
     def set(self, key: str, value):
-        cfg = self._read()
-        keys = key.split(".")
-        target = cfg
-        for k in keys[:-1]:
-            if k not in target or not isinstance(target[k], dict):
-                target[k] = {}
-            target = target[k]
-        target[keys[-1]] = value
-        self._write(cfg)
+        with self._lock:
+            cfg = self._read()
+            keys = key.split(".")
+            target = cfg
+            for k in keys[:-1]:
+                if k not in target or not isinstance(target[k], dict):
+                    target[k] = {}
+                target = target[k]
+            target[keys[-1]] = value
+            self._write(cfg)
+
+    def set_batch(self, updates: dict):
+        with self._lock:
+            cfg = self._read()
+            for key, value in updates.items():
+                keys = key.split(".")
+                target = cfg
+                for k in keys[:-1]:
+                    if k not in target or not isinstance(target[k], dict):
+                        target[k] = {}
+                    target = target[k]
+                target[keys[-1]] = value
+            self._write(cfg)
 
     def add_ai_model(self, model: dict):
-        cfg = self._read()
-        models = cfg.setdefault("ai_models", [])
-        model["id"] = str(int(datetime.now().timestamp() * 1000))
-        models.append(model)
-        self._write(cfg)
+        with self._lock:
+            cfg = self._read()
+            models = cfg.setdefault("ai_models", [])
+            model["id"] = str(int(datetime.now().timestamp() * 1000))
+            models.append(model)
+            self._write(cfg)
 
     def remove_ai_model(self, model_id: str):
-        cfg = self._read()
-        cfg["ai_models"] = [m for m in cfg.get("ai_models", []) if m.get("id") != model_id]
-        self._write(cfg)
+        with self._lock:
+            cfg = self._read()
+            cfg["ai_models"] = [m for m in cfg.get("ai_models", []) if m.get("id") != model_id]
+            self._write(cfg)
 
     def get_ai_models(self) -> list:
-        cfg = self._read()
+        with self._lock:
+            cfg = self._read()
         return cfg.get("ai_models", [])
 
 

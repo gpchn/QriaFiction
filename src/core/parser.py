@@ -40,12 +40,12 @@ class Parser:
 
     def _parse_program(self) -> Program:
         program = Program()
-        self._consume_newlines()
+        self._consume_block_tokens()
         while self._peek().type != TokenType.EOF:
             stmt = self._parse_statement()
             if stmt:
                 program.statements.append(stmt)
-            self._consume_newlines()
+            self._consume_block_tokens()
         return program
 
     def _parse_statement(self) -> Stmt | None:
@@ -89,6 +89,8 @@ class Parser:
             return QuitStmt(line=tok.line, col=tok.col)
         elif tok.type == TokenType.PYTHON:
             return self._parse_python()
+        elif tok.type == TokenType.PYTHON_CODE:
+            return self._parse_python_code()
         elif tok.type == TokenType.INCLUDE:
             return self._parse_include()
         elif tok.type == TokenType.BREAK:
@@ -97,7 +99,12 @@ class Parser:
         elif tok.type == TokenType.CONTINUE:
             self._advance()
             return VarStmt(name="__continue__", line=tok.line, col=tok.col)
-        elif tok.type == TokenType.DEDENT or tok.type == TokenType.END:
+        elif tok.type == TokenType.DEDENT:
+            return None
+        elif tok.type == TokenType.END:
+            next_tok = self.tokens[self.pos + 1] if self.pos + 1 < len(self.tokens) else None
+            if next_tok and next_tok.type == TokenType.COLON:
+                return self._parse_label()
             return None
         elif tok.type == TokenType.STRING:
             next_tok = self.tokens[self.pos + 1] if self.pos + 1 < len(self.tokens) else None
@@ -154,13 +161,12 @@ class Parser:
     def _parse_interact(self) -> InteractStmt:
         self._expect(TokenType.INTERACT)
         self._expect(TokenType.COLON)
-        self._consume_newlines()
-        self._expect(TokenType.INDENT)
+        self._consume_block_tokens()
 
         stmt = InteractStmt()
-        while self._peek().type != TokenType.DEDENT:
-            self._consume_newlines()
-            if self._peek().type == TokenType.DEDENT:
+        while self._peek().type != TokenType.END:
+            self._consume_block_tokens()
+            if self._peek().type == TokenType.END:
                 break
             if self._peek().type == TokenType.FALLBACK:
                 self._advance()
@@ -172,10 +178,20 @@ class Parser:
             else:
                 raise SyntaxError(f"interact 块中期望动作或 fallback", self._peek().line, self._peek().col, self.filename)
 
-        self._expect(TokenType.DEDENT)
+        end_tok = self._expect(TokenType.END)
         if not stmt.fallbacks:
-            raise SyntaxError("interact 块中至少需要一条 fallback", tok.line, tok.col, self.filename)
+            raise SyntaxError("interact 块中至少需要一条 fallback", end_tok.line, end_tok.col, self.filename)
         return stmt
+
+    def _parse_param_key(self) -> str:
+        tok = self._peek()
+        if tok.type == TokenType.IDENTIFIER:
+            self._advance()
+            return tok.value
+        if tok.type in (TokenType.DESC, TokenType.CONDITION):
+            self._advance()
+            return tok.value
+        raise SyntaxError(f"期望参数名，但得到 {tok.type.name} ({tok.value!r})", tok.line, tok.col, self.filename)
 
     def _parse_interact_action(self) -> InteractAction:
         name_tok = self._expect(TokenType.STRING)
@@ -189,12 +205,12 @@ class Parser:
         while True:
             if self._peek().type == TokenType.RPAREN:
                 break
-            key = self._expect(TokenType.IDENTIFIER)
+            key = self._parse_param_key()
             self._expect(TokenType.ASSIGN)
-            if key.value == "desc":
+            if key == "desc":
                 val = self._expect(TokenType.STRING)
                 desc = val.value
-            elif key.value == "condition":
+            elif key == "condition":
                 condition = self._parse_expression()
             self._match(TokenType.COMMA)
 
@@ -222,12 +238,12 @@ class Parser:
             while True:
                 if self._peek().type == TokenType.RPAREN:
                     break
-                key = self._expect(TokenType.IDENTIFIER)
+                key = self._parse_param_key()
                 self._expect(TokenType.ASSIGN)
-                if key.value == "desc":
+                if key == "desc":
                     val = self._expect(TokenType.STRING)
                     desc = val.value
-                elif key.value == "condition":
+                elif key == "condition":
                     condition = self._parse_expression()
                 self._match(TokenType.COMMA)
             self._expect(TokenType.RPAREN)
@@ -242,27 +258,26 @@ class Parser:
 
     def _parse_label(self) -> LabelStmt:
         self._expect(TokenType.LABEL)
-        name_tok = self._expect(TokenType.IDENTIFIER)
+        tok = self._peek()
+        if tok.type in (TokenType.IDENTIFIER, TokenType.END, TokenType.LABEL, TokenType.BREAK, TokenType.CONTINUE):
+            self._advance()
+        else:
+            raise SyntaxError(f"期望标签名，但得到 {tok.type.name} ({tok.value!r})", tok.line, tok.col, self.filename)
         self._expect(TokenType.COLON)
-        self._consume_newlines()
-        self._expect(TokenType.INDENT)
+        self._consume_block_tokens()
 
-        body = []
-        while self._peek().type != TokenType.DEDENT:
-            self._consume_newlines()
-            if self._peek().type == TokenType.DEDENT:
-                break
-            stmt = self._parse_statement()
-            if stmt:
-                body.append(stmt)
-            self._consume_newlines()
-
-        self._expect(TokenType.DEDENT)
-        return LabelStmt(name=name_tok.value, body=body)
+        body = self._parse_block()
+        self._expect(TokenType.END)
+        return LabelStmt(name=tok.value, body=body)
 
     def _parse_jump(self) -> JumpStmt:
         self._expect(TokenType.JUMP)
-        target = self._expect(TokenType.IDENTIFIER)
+        tok = self._peek()
+        if tok.type in (TokenType.IDENTIFIER, TokenType.END, TokenType.LABEL):
+            self._advance()
+        else:
+            raise SyntaxError(f"期望标签名，但得到 {tok.type.name} ({tok.value!r})", tok.line, tok.col, self.filename)
+        target = tok.value
 
         condition = None
         is_otherwise = False
@@ -274,7 +289,7 @@ class Parser:
             self._advance()
             is_otherwise = True
 
-        return JumpStmt(target=target.value, condition=condition, is_otherwise=is_otherwise)
+        return JumpStmt(target=target, condition=condition, is_otherwise=is_otherwise)
 
     def _parse_call(self) -> CallStmt:
         self._expect(TokenType.CALL)
@@ -315,53 +330,57 @@ class Parser:
         self._expect(TokenType.IF)
         condition = self._parse_expression()
         self._expect(TokenType.COLON)
-        self._consume_newlines()
-        self._expect(TokenType.INDENT)
+        self._consume_block_tokens()
 
         branches = []
         else_body = []
 
-        body = self._parse_block()
+        body = self._parse_block(stop_at={TokenType.ELSEIF, TokenType.ELSE})
         branches.append(IfBranch(condition=condition, body=body))
 
         while self._peek().type == TokenType.ELSEIF:
             self._advance()
             cond = self._parse_expression()
             self._expect(TokenType.COLON)
-            self._consume_newlines()
-            self._expect(TokenType.INDENT)
-            b = self._parse_block()
+            self._consume_block_tokens()
+            b = self._parse_block(stop_at={TokenType.ELSEIF, TokenType.ELSE})
             branches.append(IfBranch(condition=cond, body=b))
 
         if self._peek().type == TokenType.ELSE:
             self._advance()
             self._expect(TokenType.COLON)
-            self._consume_newlines()
-            self._expect(TokenType.INDENT)
+            self._consume_block_tokens()
             else_body = self._parse_block()
 
+        self._expect(TokenType.END)
         return IfStmt(branches=branches, else_body=else_body)
 
     def _parse_while(self) -> WhileStmt:
         self._expect(TokenType.WHILE)
         condition = self._parse_expression()
         self._expect(TokenType.COLON)
-        self._consume_newlines()
-        self._expect(TokenType.INDENT)
+        self._consume_block_tokens()
         body = self._parse_block()
+        self._expect(TokenType.END)
         return WhileStmt(condition=condition, body=body)
 
-    def _parse_block(self) -> list:
+    def _consume_block_tokens(self):
+        while self._peek().type in (TokenType.NEWLINE, TokenType.INDENT, TokenType.DEDENT):
+            self._advance()
+
+    def _parse_block(self, stop_at: set = None) -> list:
         body = []
-        while self._peek().type != TokenType.DEDENT:
-            self._consume_newlines()
-            if self._peek().type == TokenType.DEDENT:
+        stop_tokens = {TokenType.END}
+        if stop_at:
+            stop_tokens.update(stop_at)
+        while self._peek().type not in stop_tokens:
+            self._consume_block_tokens()
+            if self._peek().type in stop_tokens:
                 break
             stmt = self._parse_statement()
             if stmt:
                 body.append(stmt)
-            self._consume_newlines()
-        self._expect(TokenType.DEDENT)
+            self._consume_block_tokens()
         return body
 
     def _parse_wait(self) -> WaitStmt:
@@ -379,17 +398,23 @@ class Parser:
     def _parse_python(self) -> PythonBlockStmt:
         self._expect(TokenType.PYTHON)
         self._expect(TokenType.COLON)
-        self._consume_newlines()
-        self._expect(TokenType.INDENT)
+        self._consume_block_tokens()
         lines = []
-        while self._peek().type != TokenType.DEDENT:
+        while self._peek().type != TokenType.END:
             t = self._advance()
             if t.type == TokenType.NEWLINE:
                 lines.append("\n")
             else:
                 lines.append(str(t.value) if t.value else t.type.name)
-        self._expect(TokenType.DEDENT)
+        self._expect(TokenType.END)
         return PythonBlockStmt(code="".join(lines))
+
+    def _parse_python_code(self) -> PythonBlockStmt:
+        tok = self._expect(TokenType.PYTHON_CODE)
+        self._consume_block_tokens()
+        if self._peek().type == TokenType.END:
+            self._advance()
+        return PythonBlockStmt(code=tok.value)
 
     def _parse_include(self) -> IncludeStmt:
         self._expect(TokenType.INCLUDE)

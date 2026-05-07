@@ -10,21 +10,9 @@
             theme: {
                 extend: {
                     colors: {
-                        surface: {
-                            0: 'var(--s0)',
-                            1: 'var(--s1)',
-                            2: 'var(--s2)',
-                            3: 'var(--s3)',
-                        },
-                        fg: {
-                            DEFAULT: 'var(--fg)',
-                            muted: 'var(--fg-m)',
-                            faint: 'var(--fg-f)',
-                        },
-                        line: {
-                            DEFAULT: 'var(--line)',
-                            hover: 'var(--line-h)',
-                        },
+                        surface: { 0: 'var(--s0)', 1: 'var(--s1)', 2: 'var(--s2)', 3: 'var(--s3)' },
+                        fg: { DEFAULT: 'var(--fg)', muted: 'var(--fg-m)', faint: 'var(--fg-f)' },
+                        line: { DEFAULT: 'var(--line)', hover: 'var(--line-h)' },
                         accent: 'var(--accent)',
                     },
                 },
@@ -57,7 +45,7 @@
             --accent: #000000;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; overflow: hidden; }
+        body { font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; font-size: 16px; font-weight: 500; overflow: hidden; }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 2px; }
@@ -81,32 +69,38 @@
         .dot-1 { animation: dotPulse 1.4s infinite; }
         .dot-2 { animation: dotPulse 1.4s infinite 0.2s; }
         .dot-3 { animation: dotPulse 1.4s infinite 0.4s; }
+
+        @keyframes continuePulse {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 1; }
+        }
+        .continue-hint { animation: continuePulse 1.8s ease-in-out infinite; }
     </style>
 </head>
-<body class="light" id="app">
+<body id="app">
 
 <!-- ==================== LAUNCHER ==================== -->
 <div v-if="view === 'launcher'" class="h-screen flex" style="background:var(--s0);color:var(--fg)">
 
     <!-- Sidebar -->
-    <aside class="w-48 h-full flex flex-col border-r flex-shrink-0" style="border-color:var(--line);background:var(--s1)">
+    <aside class="w-52 h-full flex flex-col border-r flex-shrink-0" style="border-color:var(--line);background:var(--s1)">
         <div class="px-5 pt-6 pb-8">
-            <div class="text-[11px] font-bold tracking-[0.25em] uppercase" style="color:var(--fg)">QriaFiction</div>
+            <div class="text-[14px] font-bold tracking-[0.25em] uppercase" style="color:var(--fg)">QriaFiction</div>
         </div>
         <nav class="flex-1 px-3 space-y-0.5">
             <button v-for="t in tabs" :key="t.id" @click="page=t.id"
-                class="w-full text-left px-3 py-2 text-[12px] rounded transition-all duration-150"
+                class="w-full text-left px-3 py-2.5 text-[14px] rounded transition-all duration-150"
                 :style="{
                     background: page===t.id ? 'var(--s3)' : 'transparent',
                     color: page===t.id ? 'var(--fg)' : 'var(--fg-m)',
-                    fontWeight: page===t.id ? 600 : 400
+                    fontWeight: page===t.id ? 600 : 500
                 }">
                 {{ t.label }}
             </button>
         </nav>
         <div class="px-3 pb-4">
             <button @click="toggleTheme"
-                class="w-full px-3 py-2 text-[11px] rounded transition-colors"
+                class="w-full px-3 py-2 text-[13px] font-medium rounded transition-colors"
                 :style="{color:'var(--fg-m)'}"
                 @mouseenter="$event.target.style.background='var(--s3)'"
                 @mouseleave="$event.target.style.background='transparent'">
@@ -119,15 +113,15 @@
     <main class="flex-1 flex flex-col min-w-0">
         <!-- Header -->
         <header class="h-14 flex items-center justify-between px-8 border-b flex-shrink-0" style="border-color:var(--line)">
-            <h2 class="text-[13px] font-semibold" style="color:var(--fg)">{{ currentPageTitle }}</h2>
+            <h2 class="text-[15px] font-semibold" style="color:var(--fg)">{{ currentPageTitle }}</h2>
             <div class="flex items-center gap-2">
                 <button v-if="page==='projects'" @click="openImport"
-                    class="h-7 px-3 text-[11px] font-medium rounded transition-all duration-150"
+                    class="h-9 px-4 text-[13px] font-medium rounded transition-all duration-150"
                     :style="{background:'var(--accent)',color:'var(--s0)'}">
                     导入项目
                 </button>
                 <button v-if="page==='models'" @click="openAddModel"
-                    class="h-7 px-3 text-[11px] font-medium rounded transition-all duration-150"
+                    class="h-9 px-4 text-[13px] font-medium rounded transition-all duration-150"
                     :style="{background:'var(--accent)',color:'var(--s0)'}">
                     添加模型
                 </button>
@@ -140,9 +134,9 @@
             <!-- Projects -->
             <div v-if="page==='projects'">
                 <div v-if="projects.length===0" class="flex flex-col items-center justify-center pt-32">
-                    <div class="w-10 h-10 rounded-lg flex items-center justify-center mb-4 text-lg" style="background:var(--s2);color:var(--fg-f)">◇</div>
-                    <p class="text-[12px] mb-5" style="color:var(--fg-m)">暂无项目</p>
-                    <button @click="openImport" class="h-8 px-4 text-[11px] font-medium rounded transition-colors" style="border:1px solid var(--line);color:var(--fg-m)">导入项目</button>
+                    <div class="w-14 h-14 rounded-lg flex items-center justify-center mb-4 text-2xl" style="background:var(--s2);color:var(--fg-f)">◇</div>
+                    <p class="text-[14px] font-medium mb-5" style="color:var(--fg-m)">暂无项目</p>
+                    <button @click="openImport" class="h-10 px-5 text-[13px] font-medium rounded transition-colors" style="border:1px solid var(--line);color:var(--fg-m)">导入项目</button>
                 </div>
                 <div v-else class="grid grid-cols-3 gap-4">
                     <div v-for="p in projects" :key="p.id"
@@ -151,23 +145,23 @@
                         @mouseenter="$event.currentTarget.style.borderColor='var(--line-h)'"
                         @mouseleave="$event.currentTarget.style.borderColor='var(--line)'">
                         <div class="flex items-center gap-2 mb-3">
-                            <div class="w-2 h-2 rounded-full" :style="{background: p.has_script ? '#4ade80' : '#fbbf24'}"></div>
-                            <span class="text-[13px] font-semibold truncate" style="color:var(--fg)">{{ p.title || p.name }}</span>
+                            <div class="w-2.5 h-2.5 rounded-full" :style="{background: p.has_script ? '#4ade80' : '#fbbf24'}"></div>
+                            <span class="text-[15px] font-semibold truncate" style="color:var(--fg)">{{ p.title || p.name }}</span>
                         </div>
-                        <div class="flex items-center gap-2 mb-4 min-h-[18px]">
-                            <span v-if="p.author" class="text-[11px]" style="color:var(--fg-m)">{{ p.author }}</span>
-                            <span v-if="p.version" class="text-[10px] px-1.5 py-0.5 rounded" style="background:var(--s3);color:var(--fg-f)">v{{ p.version }}</span>
+                        <div class="flex items-center gap-2 mb-4 min-h-[20px]">
+                            <span v-if="p.author" class="text-[13px] font-medium" style="color:var(--fg-m)">{{ p.author }}</span>
+                            <span v-if="p.version" class="text-[12px] font-medium px-2 py-0.5 rounded" style="background:var(--s3);color:var(--fg-f)">v{{ p.version }}</span>
                         </div>
                         <div class="flex gap-2">
                             <button @click="launch(p.id)" :disabled="!p.has_script"
-                                class="flex-1 h-7 text-[11px] font-medium rounded transition-colors disabled:opacity-20"
+                                class="flex-1 h-9 text-[13px] font-medium rounded transition-colors disabled:opacity-20"
                                 style="border:1px solid var(--line);color:var(--fg)"
                                 @mouseenter="!$event.target.disabled && ($event.target.style.background='var(--s3)')"
                                 @mouseleave="$event.target.style.background='transparent'">
                                 启动
                             </button>
                             <button @click="askDelete(p)"
-                                class="h-7 px-2.5 text-[11px] rounded transition-colors"
+                                class="h-9 px-3 text-[13px] font-medium rounded transition-colors"
                                 style="border:1px solid var(--line);color:var(--fg-f)"
                                 @mouseenter="$event.target.style.color='#f87171';$event.target.style.borderColor='rgba(248,113,113,0.3)'"
                                 @mouseleave="$event.target.style.color='var(--fg-f)';$event.target.style.borderColor='var(--line)'">
@@ -181,20 +175,20 @@
             <!-- Models -->
             <div v-if="page==='models'" class="max-w-xl">
                 <div v-if="models.length===0" class="flex flex-col items-center justify-center pt-32">
-                    <div class="w-10 h-10 rounded-lg flex items-center justify-center mb-4 text-lg" style="background:var(--s2);color:var(--fg-f)">⚙</div>
-                    <p class="text-[12px] mb-5" style="color:var(--fg-m)">未配置模型</p>
-                    <button @click="openAddModel" class="h-8 px-4 text-[11px] font-medium rounded transition-colors" style="border:1px solid var(--line);color:var(--fg-m)">添加模型</button>
+                    <div class="w-14 h-14 rounded-lg flex items-center justify-center mb-4 text-2xl" style="background:var(--s2);color:var(--fg-f)">⚙</div>
+                    <p class="text-[14px] font-medium mb-5" style="color:var(--fg-m)">未配置模型</p>
+                    <button @click="openAddModel" class="h-10 px-5 text-[13px] font-medium rounded transition-colors" style="border:1px solid var(--line);color:var(--fg-m)">添加模型</button>
                 </div>
                 <div v-else class="space-y-2">
                     <div v-for="m in models" :key="m.id"
                         class="flex items-center justify-between px-4 py-3 rounded-lg group transition-colors"
                         style="background:var(--s1);border:1px solid var(--line)">
                         <div class="min-w-0 flex-1">
-                            <div class="text-[12px] font-medium truncate" style="color:var(--fg)">{{ m.name }}</div>
-                            <div class="text-[11px] mt-0.5" style="color:var(--fg-f)">{{ m.provider }} · {{ m.model || 'default' }}</div>
+                            <div class="text-[14px] font-medium truncate" style="color:var(--fg)">{{ m.name }}</div>
+                            <div class="text-[13px] font-medium mt-0.5" style="color:var(--fg-f)">{{ m.provider }} · {{ m.model || 'default' }}</div>
                         </div>
                         <button @click="removeModel(m.id)"
-                            class="w-6 h-6 rounded flex items-center justify-center text-[13px] opacity-0 group-hover:opacity-100 transition-opacity"
+                            class="w-8 h-8 rounded flex items-center justify-center text-[16px] font-medium opacity-0 group-hover:opacity-100 transition-opacity"
                             style="color:var(--fg-f)"
                             @mouseenter="$event.target.style.color='#f87171'"
                             @mouseleave="$event.target.style.color='var(--fg-f)'">
@@ -208,12 +202,12 @@
             <div v-if="page==='settings'" class="max-w-md">
                 <div class="space-y-8">
                     <section>
-                        <h3 class="text-[11px] font-semibold tracking-wider uppercase mb-4" style="color:var(--fg-m)">常规</h3>
+                        <h3 class="text-[13px] font-semibold tracking-wider uppercase mb-4" style="color:var(--fg-m)">常规</h3>
                         <div class="space-y-4">
                             <div>
-                                <label class="text-[11px] mb-1.5 block" style="color:var(--fg-m)">默认 AI 提供商</label>
+                                <label class="text-[13px] font-medium mb-1.5 block" style="color:var(--fg-m)">默认 AI 提供商</label>
                                 <select v-model="cfg.default_ai_provider"
-                                    class="w-full h-9 px-3 text-[12px] rounded"
+                                    class="w-full h-10 px-3 text-[14px] font-medium rounded"
                                     style="background:var(--s2);border:1px solid var(--line);color:var(--fg)">
                                     <option value="keyword">关键词匹配（本地）</option>
                                     <option value="openai">OpenAI</option>
@@ -222,32 +216,32 @@
                             </div>
                             <div class="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label class="text-[11px] mb-1.5 block" style="color:var(--fg-m)">窗口宽度</label>
+                                    <label class="text-[13px] font-medium mb-1.5 block" style="color:var(--fg-m)">窗口宽度</label>
                                     <input type="number" v-model.number="cfg.window_width"
-                                        class="w-full h-9 px-3 text-[12px] rounded"
+                                        class="w-full h-10 px-3 text-[14px] font-medium rounded"
                                         style="background:var(--s2);border:1px solid var(--line);color:var(--fg)">
                                 </div>
                                 <div>
-                                    <label class="text-[11px] mb-1.5 block" style="color:var(--fg-m)">窗口高度</label>
+                                    <label class="text-[13px] font-medium mb-1.5 block" style="color:var(--fg-m)">窗口高度</label>
                                     <input type="number" v-model.number="cfg.window_height"
-                                        class="w-full h-9 px-3 text-[12px] rounded"
+                                        class="w-full h-10 px-3 text-[14px] font-medium rounded"
                                         style="background:var(--s2);border:1px solid var(--line);color:var(--fg)">
                                 </div>
                             </div>
                         </div>
                     </section>
                     <section>
-                        <h3 class="text-[11px] font-semibold tracking-wider uppercase mb-4" style="color:var(--fg-m)">主题</h3>
+                        <h3 class="text-[13px] font-semibold tracking-wider uppercase mb-4" style="color:var(--fg-m)">主题</h3>
                         <div class="flex gap-3">
                             <button @click="applyTheme(true)"
-                                class="flex-1 h-10 rounded text-[12px] font-medium transition-all"
+                                class="flex-1 h-10 rounded text-[14px] font-medium transition-all"
                                 :style="{
                                     background: '#000', color: isDark ? '#fff' : '#555',
                                     border: isDark ? '2px solid #fff' : '1px solid var(--line)',
                                     boxShadow: isDark ? '0 0 0 1px #fff' : 'none'
                                 }">深色</button>
                             <button @click="applyTheme(false)"
-                                class="flex-1 h-10 rounded text-[12px] font-medium transition-all"
+                                class="flex-1 h-10 rounded text-[14px] font-medium transition-all"
                                 :style="{
                                     background: '#fff', color: !isDark ? '#000' : '#999',
                                     border: !isDark ? '2px solid #000' : '1px solid var(--line)',
@@ -256,7 +250,7 @@
                         </div>
                     </section>
                     <button @click="saveCfg"
-                        class="w-full h-9 text-[12px] font-semibold rounded transition-opacity hover:opacity-80"
+                        class="w-full h-10 text-[14px] font-semibold rounded transition-opacity hover:opacity-80"
                         style="background:var(--accent);color:var(--s0)">
                         保存设置
                     </button>
@@ -265,7 +259,7 @@
         </div>
 
         <!-- Footer -->
-        <footer class="h-7 flex items-center justify-between px-8 text-[10px] border-t flex-shrink-0" style="border-color:var(--line);color:var(--fg-f)">
+        <footer class="h-8 flex items-center justify-between px-8 text-[12px] font-medium border-t flex-shrink-0" style="border-color:var(--line);color:var(--fg-f)">
             <span>就绪</span>
             <span>v0.1.0</span>
         </footer>
@@ -273,66 +267,94 @@
 </div>
 
 <!-- ==================== GAME ==================== -->
-<div v-if="view === 'game'" class="h-screen flex flex-col" style="background:#000;color:#ddd">
+<div v-if="view === 'game'" class="h-screen flex flex-col" style="background:var(--s0);color:var(--fg)">
 
     <!-- Game Header -->
-    <div class="h-10 flex items-center px-5 flex-shrink-0" style="border-bottom:1px solid #151515">
+    <header class="h-12 flex items-center px-5 flex-shrink-0 border-b" style="border-color:var(--line);background:var(--s1)">
         <button @click="backToLauncher"
-            class="text-[10px] tracking-wider uppercase transition-colors hover:text-white"
-            style="color:#444">← 返回</button>
-        <span class="mx-3 text-[10px]" style="color:#222">|</span>
-        <span class="text-[10px] font-semibold tracking-wider uppercase" style="color:#333">QriaFiction</span>
-        <span class="ml-auto text-[10px] font-mono" style="color:#282828">{{ gameStatus }}</span>
-    </div>
+            class="h-8 px-3 text-[13px] font-medium rounded transition-all duration-150"
+            style="border:1px solid var(--line);color:var(--fg-m)"
+            @mouseenter="$event.target.style.background='var(--s3)';$event.target.style.color='var(--fg)'"
+            @mouseleave="$event.target.style.background='transparent';$event.target.style.color='var(--fg-m)'">
+            ← 返回
+        </button>
+        <div class="ml-auto flex items-center gap-3">
+            <span class="text-[13px] font-medium truncate max-w-[200px]" style="color:var(--fg-m)">{{ gameProjectName }}</span>
+            <span class="text-[12px] font-medium" style="color:var(--fg-f)">{{ gameStatus }}</span>
+        </div>
+    </header>
 
     <!-- Messages -->
-    <div ref="msgContainer" class="flex-1 overflow-y-auto px-6 py-5 relative" style="background:#030303">
-        <div class="max-w-2xl mx-auto space-y-3">
+    <div ref="msgContainer" class="flex-1 overflow-y-auto px-6 py-6" style="background:var(--s0)" @click="onMsgAreaClick" @keydown.space.prevent="onMsgAreaClick" @keydown.enter.prevent="onMsgAreaClick" tabindex="0">
+        <div class="max-w-2xl mx-auto space-y-5">
+            <!-- Empty state -->
+            <div v-if="messages.length===0" class="flex flex-col items-center justify-center pt-32">
+                <div class="w-14 h-14 rounded-lg flex items-center justify-center mb-4 text-2xl" style="background:var(--s2);color:var(--fg-f)">◇</div>
+                <p class="text-[15px] font-medium" style="color:var(--fg-m)">游戏已启动，等待剧情...</p>
+            </div>
+
             <div v-for="(m, i) in messages" :key="i" class="msg-in">
-                <!-- System -->
-                <div v-if="m.type==='system'" class="py-2 text-center">
-                    <span class="text-[11px] px-3 py-1 rounded-full" style="color:#444;border:1px solid #151515">{{ m.text }}</span>
+                <!-- System / Narrator -->
+                <div v-if="m.type==='system'" class="py-3 text-center">
+                    <span class="text-[15px] font-semibold px-5 py-2 rounded-full inline-block max-w-full" style="color:var(--fg-m);border:1px solid var(--line);background:var(--s1)">{{ m.text }}</span>
                 </div>
                 <!-- Character / User -->
-                <div v-else class="flex gap-2.5"
+                <div v-else class="flex gap-3"
                     :style="{flexDirection: m.type==='user' ? 'row-reverse' : 'row'}">
-                    <div class="w-8 h-8 rounded flex-shrink-0 flex items-center justify-center text-[11px] overflow-hidden"
-                        style="background:#0a0a0a;border:1px solid #161616;color:#555">
+                    <!-- Avatar -->
+                    <div class="w-11 h-11 rounded-lg flex-shrink-0 flex items-center justify-center text-[16px] font-bold overflow-hidden"
+                        :style="{
+                            background: m.avatar ? 'var(--s2)' : (m.color || 'var(--s2)'),
+                            border: '1px solid ' + (m.color ? 'transparent' : 'var(--line)'),
+                            color: m.avatar ? 'var(--fg-m)' : contrastColor(m.color)
+                        }">
                         <img v-if="m.avatar" :src="m.avatar" class="w-full h-full object-cover">
-                        <span v-else class="font-medium">{{ m.type==='user' ? '你' : (m.name ? m.name[0] : '?') }}</span>
+                        <span v-else>{{ m.type==='user' ? '你' : (m.name ? m.name[0] : '?') }}</span>
                     </div>
-                    <div class="min-w-0 max-w-[75%]">
-                        <div v-if="m.name" class="text-[10px] font-medium mb-1" :style="{color: m.color || '#555'}">{{ m.name }}</div>
-                        <div class="px-3.5 py-2 text-[13px] leading-relaxed break-words"
+                    <!-- Content -->
+                    <div class="min-w-0" :style="{maxWidth: m.type==='user' ? '75%' : 'calc(100% - 3.5rem)'}">
+                        <div v-if="m.name" class="text-[13px] font-semibold mb-1.5"
                             :style="{
-                                background: m.type==='user' ? '#0c0c0c' : '#080808',
-                                border: '1px solid ' + (m.type==='user' ? '#181818' : '#131313'),
+                                textAlign: m.type==='user' ? 'right' : 'left',
+                                color: m.color || 'var(--fg-m)'
+                            }">{{ m.name }}</div>
+                        <div class="px-4 py-3 text-[16px] font-medium leading-relaxed break-words"
+                            :style="{
+                                background: m.type==='user' ? 'var(--s2)' : (m.color ? colorBubble(m.color) : 'var(--s1)'),
+                                border: '1px solid ' + (m.color ? 'transparent' : 'var(--line)'),
                                 borderRadius: m.type==='user' ? '10px 2px 10px 10px' : '2px 10px 10px 10px'
                             }">{{ m.text }}</div>
                     </div>
                 </div>
             </div>
 
+            <!-- Continue hint -->
+            <div v-if="showContinueHint" class="text-center py-2 continue-hint">
+                <span class="text-[13px] font-medium" style="color:var(--fg-f)">▼ 点击继续</span>
+            </div>
+
             <!-- Loading dots -->
             <div v-if="gameLoading" class="flex gap-1.5 px-3 pt-1">
-                <span class="w-1.5 h-1.5 rounded-full dot-1" style="background:#333"></span>
-                <span class="w-1.5 h-1.5 rounded-full dot-2" style="background:#333"></span>
-                <span class="w-1.5 h-1.5 rounded-full dot-3" style="background:#333"></span>
+                <span class="w-1.5 h-1.5 rounded-full dot-1" style="background:var(--fg-f)"></span>
+                <span class="w-1.5 h-1.5 rounded-full dot-2" style="background:var(--fg-f)"></span>
+                <span class="w-1.5 h-1.5 rounded-full dot-3" style="background:var(--fg-f)"></span>
             </div>
         </div>
     </div>
 
     <!-- Input -->
-    <div class="px-5 py-3 flex gap-2 flex-shrink-0" style="border-top:1px solid #131313"
-        :style="{opacity: gameInputEnabled ? 1 : 0.3, pointerEvents: gameInputEnabled ? 'auto' : 'none'}">
+    <div class="px-6 py-4 flex gap-3 flex-shrink-0 border-t" style="border-color:var(--line);background:var(--s1)"
+        :style="{opacity: gameInputEnabled ? 1 : 0.2, pointerEvents: gameInputEnabled ? 'auto' : 'none'}">
         <input type="text" v-model="gameInput" @keydown.enter="sendInput"
             :placeholder="gamePlaceholder" autocomplete="off" spellcheck="false"
-            class="flex-1 h-9 px-4 text-[13px] rounded"
-            style="background:#080808;border:1px solid #161616;color:#ddd">
+            class="flex-1 h-11 px-4 text-[15px] font-medium rounded"
+            style="background:var(--s2);border:1px solid var(--line);color:var(--fg)">
         <button @click="sendInput"
-            class="w-9 h-9 rounded flex items-center justify-center flex-shrink-0 transition-colors hover:bg-[#151515]"
-            style="background:#0c0c0c;border:1px solid #161616;color:#444">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+            class="h-11 w-11 rounded flex items-center justify-center flex-shrink-0 transition-all duration-150"
+            style="background:var(--accent);color:var(--s0)"
+            @mouseenter="$event.target.style.opacity='0.85'"
+            @mouseleave="$event.target.style.opacity='1'">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
         </button>
     </div>
 </div>
@@ -342,15 +364,15 @@
     <div v-if="modal.show" class="fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.6);backdrop-filter:blur(6px)" @click.self="modal.show=false">
         <div class="w-80 rounded-lg overflow-hidden" style="background:var(--s1);border:1px solid var(--line)">
             <div class="px-5 pt-5 pb-3">
-                <div class="text-[12px] font-semibold" style="color:var(--fg)">{{ modal.title }}</div>
+                <div class="text-[14px] font-semibold" style="color:var(--fg)">{{ modal.title }}</div>
             </div>
             <div class="px-5 pb-4" v-html="modal.body"></div>
             <div class="flex gap-2 px-5 pb-5">
                 <button @click="modal.show=false"
-                    class="flex-1 h-8 text-[11px] font-medium rounded transition-colors"
+                    class="flex-1 h-10 text-[13px] font-medium rounded transition-colors"
                     style="border:1px solid var(--line);color:var(--fg-m)">取消</button>
                 <button @click="modal.onOk();modal.show=false"
-                    class="flex-1 h-8 text-[11px] font-semibold rounded transition-opacity hover:opacity-80"
+                    class="flex-1 h-10 text-[13px] font-semibold rounded transition-opacity hover:opacity-80"
                     style="background:var(--accent);color:var(--s0)">确认</button>
             </div>
         </div>
@@ -361,7 +383,7 @@
 <div class="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
     <transition-group>
         <div v-for="t in toasts" :key="t.id"
-            class="px-3 py-2 rounded text-[11px] font-medium"
+            class="px-4 py-2.5 rounded text-[13px] font-medium"
             :style="{
                 background: t.type==='error' ? 'var(--s2)' : 'var(--s3)',
                 color: t.type==='error' ? '#f87171' : 'var(--fg)',

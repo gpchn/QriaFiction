@@ -19,6 +19,9 @@ class AppLogger:
         except OSError:
             pass
 
+    def debug(self, message: str):
+        self._log("debug", message)
+
     def info(self, message: str):
         self._log("info", message)
 

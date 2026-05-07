@@ -23,4 +23,9 @@ Thumbs.db
 *.toml
 
 # Data (keep structure)
-data
+data/*
+!data/games
+data/games/*
+!data/games/demo
+!data/games/demo/*
+

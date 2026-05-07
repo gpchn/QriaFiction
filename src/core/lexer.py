@@ -17,302 +17,213 @@ class Lexer:
     def __init__(self, source: str, filename: str = "<unknown>"):
         self.source = source
         self.filename = filename
-        self.pos = 0
-        self.line = 1
-        self.col = 1
         self.indent_stack = [0]
-        self.at_line_start = True
 
-    def _peek(self) -> str:
-        if self.pos >= len(self.source):
-            return "\0"
-        return self.source[self.pos]
-
-    def _peek_next(self) -> str:
-        if self.pos + 1 >= len(self.source):
-            return "\0"
-        return self.source[self.pos + 1]
-
-    def _advance(self) -> str:
-        ch = self.source[self.pos]
-        self.pos += 1
-        if ch == "\n":
-            self.line += 1
-            self.col = 1
-        else:
-            self.col += 1
-        return ch
-
-    def _skip_whitespace(self):
-        while self.pos < len(self.source) and self.source[self.pos] in (" ", "\t"):
-            self._advance()
-
-    def _read_string(self, quote: str) -> str:
-        result = []
-        self._advance()
-        while self.pos < len(self.source):
-            ch = self.source[self.pos]
-            if ch == "\\":
-                self._advance()
-                esc = self._advance()
-                if esc == "n":
-                    result.append("\n")
-                elif esc == "t":
-                    result.append("\t")
-                elif esc == "\\":
-                    result.append("\\")
-                elif esc == quote:
-                    result.append(quote)
-                else:
-                    result.append("\\")
-                    result.append(esc)
-            elif ch == quote:
-                self._advance()
-                return "".join(result)
-            elif ch == "\n":
-                raise LexerError("字符串中不允许换行", self.line, self.col, self.filename)
-            else:
-                result.append(self._advance())
-        raise LexerError("未闭合的字符串", self.line, self.col, self.filename)
-
-    def _read_number(self) -> Token:
-        start_col = self.col
-        start_line = self.line
-        result = []
-        has_dot = False
-        while self.pos < len(self.source) and (self.source[self.pos].isdigit() or self.source[self.pos] == "."):
-            if self.source[self.pos] == ".":
-                if has_dot:
-                    break
-                has_dot = True
-            result.append(self._advance())
-        value = float("".join(result)) if has_dot else int("".join(result))
-        return Token(TokenType.NUMBER, value, start_line, start_col)
-
-    def _read_identifier(self) -> Token:
-        start_col = self.col
-        start_line = self.line
-        result = []
-        while self.pos < len(self.source) and (self.source[self.pos].isalnum() or self.source[self.pos] == "_"):
-            result.append(self._advance())
-        text = "".join(result)
-        type_ = KEYWORDS.get(text, TokenType.IDENTIFIER)
-        return Token(type_, text, start_line, start_col)
-
-    def _handle_indent(self) -> list:
-        indent = 0
-        saved_pos = self.pos
-        saved_line = self.line
-        saved_col = self.col
-        while self.pos < len(self.source) and self.source[self.pos] in (" ", "\t"):
-            ch = self.source[self.pos]
-            if ch == " ":
-                indent += 1
-            elif ch == "\t":
-                indent += 4
-            self.pos += 1
-
-        if self.pos < len(self.source) and self.source[self.pos] == "\n":
-            self.pos += 1
-            self.line += 1
-            self.col = 1
-            return []
-
+    def _tokenize_content(self, text: str, line_num: int, col_offset: int) -> list:
         tokens = []
-        if indent > self.indent_stack[-1]:
-            self.indent_stack.append(indent)
-            tokens.append(Token(TokenType.INDENT, indent, self.line, self.col))
-        elif indent < self.indent_stack[-1]:
-            while self.indent_stack and indent < self.indent_stack[-1]:
-                self.indent_stack.pop()
-                tokens.append(Token(TokenType.DEDENT, indent, self.line, self.col))
-        self.pos = saved_pos
-        self.line = saved_line
-        self.col = saved_col
-        return tokens
-
-    def tokenize(self) -> list:
-        tokens = []
-
-        while self.pos < len(self.source):
-            ch = self._peek()
-            next_ch = self._peek_next()
-
-            if ch == "#":
-                while self.pos < len(self.source) and self._peek() != "\n":
-                    self._advance()
-                continue
+        i = 0
+        while i < len(text):
+            ch = text[i]
+            nc = text[i + 1] if i + 1 < len(text) else "\0"
 
             if ch in (" ", "\t"):
-                if self.at_line_start:
-                    indent_tokens = self._handle_indent()
-                    if indent_tokens:
-                        tokens.extend(indent_tokens)
-                        self.at_line_start = False
-                    else:
-                        while self.pos < len(self.source) and self._peek() in (" ", "\t"):
-                            self._advance()
-                else:
-                    self._skip_whitespace()
+                i += 1
                 continue
-
-            if ch == "\n":
-                self._advance()
-                self.at_line_start = True
-                tokens.append(Token(TokenType.NEWLINE, "\n", self.line - 1, 1))
-                continue
-
-            self.at_line_start = False
 
             if ch == '"':
-                value = self._read_string('"')
-                tokens.append(Token(TokenType.STRING, value, self.line, self.col))
+                j = i + 1
+                parts = []
+                while j < len(text):
+                    if text[j] == "\\":
+                        j += 1
+                        if j < len(text):
+                            e = text[j]
+                            if e == "n": parts.append("\n")
+                            elif e == "t": parts.append("\t")
+                            elif e == "\\": parts.append("\\")
+                            elif e == '"': parts.append('"')
+                            else: parts.extend(["\\", e])
+                        j += 1
+                    elif text[j] == '"':
+                        break
+                    else:
+                        parts.append(text[j])
+                        j += 1
+                tokens.append(Token(TokenType.STRING, "".join(parts), line_num, col_offset + i))
+                i = j + 1
                 continue
 
             if ch == "'":
-                value = self._read_string("'")
-                tokens.append(Token(TokenType.STRING, value, self.line, self.col))
+                j = i + 1
+                parts = []
+                while j < len(text) and text[j] != "'":
+                    parts.append(text[j])
+                    j += 1
+                tokens.append(Token(TokenType.STRING, "".join(parts), line_num, col_offset + i))
+                i = j + 1
                 continue
 
             if ch.isdigit():
-                tokens.append(self._read_number())
+                j = i
+                has_dot = False
+                while j < len(text) and (text[j].isdigit() or text[j] == "."):
+                    if text[j] == ".":
+                        if has_dot: break
+                        has_dot = True
+                    j += 1
+                num = float(text[i:j]) if has_dot else int(text[i:j])
+                tokens.append(Token(TokenType.NUMBER, num, line_num, col_offset + i))
+                i = j
                 continue
 
             if ch.isalpha() or ch == "_":
-                tokens.append(self._read_identifier())
+                j = i
+                while j < len(text) and (text[j].isalnum() or text[j] == "_"):
+                    j += 1
+                word = text[i:j]
+                tokens.append(Token(KEYWORDS.get(word, TokenType.IDENTIFIER), word, line_num, col_offset + i))
+                i = j
                 continue
 
-            if ch == "+" and next_ch == "=":
-                self._advance()
-                self._advance()
-                tokens.append(Token(TokenType.PLUS_ASSIGN, "+=", self.line, self.col - 2))
+            ops = {
+                "+=": TokenType.PLUS_ASSIGN, "-=": TokenType.MINUS_ASSIGN,
+                "*=": TokenType.MULTIPLY_ASSIGN, "/=": TokenType.DIVIDE_ASSIGN,
+                "**": TokenType.POWER, "//": TokenType.INT_DIVIDE,
+                "->": TokenType.ARROW, "==": TokenType.EQUAL,
+                "!=": TokenType.NOT_EQUAL, "<=": TokenType.LESS_EQUAL,
+                ">=": TokenType.GREATER_EQUAL,
+            }
+            matched = False
+            for op_str, op_type in ops.items():
+                if text[i:i+len(op_str)] == op_str:
+                    tokens.append(Token(op_type, op_str, line_num, col_offset + i))
+                    i += len(op_str)
+                    matched = True
+                    break
+            if matched:
                 continue
 
-            if ch == "+":
-                self._advance()
-                tokens.append(Token(TokenType.PLUS, "+", self.line, self.col - 1))
+            singles = {
+                "+": TokenType.PLUS, "-": TokenType.MINUS,
+                "*": TokenType.MULTIPLY, "/": TokenType.DIVIDE,
+                "%": TokenType.MODULO, "=": TokenType.ASSIGN,
+                "<": TokenType.LESS, ">": TokenType.GREATER,
+                "(": TokenType.LPAREN, ")": TokenType.RPAREN,
+                ":": TokenType.COLON, ",": TokenType.COMMA,
+            }
+            if ch in singles:
+                tokens.append(Token(singles[ch], ch, line_num, col_offset + i))
+                i += 1
                 continue
 
-            if ch == "-" and next_ch == ">":
-                self._advance()
-                self._advance()
-                tokens.append(Token(TokenType.ARROW, "->", self.line, self.col - 2))
+            raise LexerError(f"未知字符: {ch!r}", line_num, col_offset + i, self.filename)
+
+        return tokens
+
+    def _strip_comment(self, text: str) -> str:
+        in_str = False
+        str_ch = None
+        skip_next = False
+        for ci, c in enumerate(text):
+            if skip_next:
+                skip_next = False
+                continue
+            if in_str:
+                if c == "\\":
+                    skip_next = True
+                elif c == str_ch:
+                    in_str = False
+                continue
+            if c in ('"', "'"):
+                in_str = True
+                str_ch = c
+            elif c == "#":
+                return text[:ci]
+        return text
+
+    def tokenize(self) -> list:
+        tokens = []
+        lines = self.source.split("\n")
+        i = 0
+
+        while i < len(lines):
+            raw = lines[i]
+            line_num = i + 1
+
+            text = self._strip_comment(raw)
+
+            # Skip blank/comment-only lines
+            if not text.strip():
+                i += 1
                 continue
 
-            if ch == "-" and next_ch == "=":
-                self._advance()
-                self._advance()
-                tokens.append(Token(TokenType.MINUS_ASSIGN, "-=", self.line, self.col - 2))
+            # Measure indent
+            indent = 0
+            for c in text:
+                if c == " ": indent += 1
+                elif c == "\t": indent += 4
+                else: break
+            content = text[indent:]
+            col_offset = 1 + indent
+
+            # Check for python: block
+            if content == "python:":
+                raw_lines = []
+                j = i + 1
+                while j < len(lines):
+                    rl = lines[j]
+                    if not rl.strip():
+                        raw_lines.append("")
+                        j += 1
+                        continue
+                    ri = 0
+                    for c in rl:
+                        if c in (" ", "\t"): ri += 1
+                        else: break
+                    if ri <= indent:
+                        break
+                    raw_lines.append(rl[indent:])
+                    j += 1
+
+                if raw_lines:
+                    # Strip common leading whitespace from all non-empty lines
+                    min_indent = float('inf')
+                    for line in raw_lines:
+                        if line.strip():
+                            ci = 0
+                            for c in line:
+                                if c in (" ", "\t"): ci += 1
+                                else: break
+                            if ci < min_indent:
+                                min_indent = ci
+                    if min_indent == float('inf'):
+                        min_indent = 0
+                    code_lines = [line[min_indent:] if line else line for line in raw_lines]
+                    code = "\n".join(code_lines)
+                    tokens.append(Token(TokenType.PYTHON_CODE, code, line_num, col_offset))
+                else:
+                    tokens.append(Token(TokenType.PYTHON, "python", line_num, col_offset))
+                i = j
                 continue
 
-            if ch == "-":
-                self._advance()
-                tokens.append(Token(TokenType.MINUS, "-", self.line, self.col - 1))
-                continue
+            # Indent management
+            if indent > self.indent_stack[-1]:
+                self.indent_stack.append(indent)
+                tokens.append(Token(TokenType.INDENT, indent, line_num, col_offset))
+            elif indent < self.indent_stack[-1]:
+                while self.indent_stack and indent < self.indent_stack[-1]:
+                    self.indent_stack.pop()
+                    tokens.append(Token(TokenType.DEDENT, indent, line_num, col_offset))
 
-            if ch == "*" and next_ch == "*":
-                self._advance()
-                self._advance()
-                tokens.append(Token(TokenType.POWER, "**", self.line, self.col - 2))
-                continue
+            # Tokenize content
+            tokens.extend(self._tokenize_content(content, line_num, col_offset))
+            tokens.append(Token(TokenType.NEWLINE, "\n", line_num, 1))
+            i += 1
 
-            if ch == "*" and next_ch == "=":
-                self._advance()
-                self._advance()
-                tokens.append(Token(TokenType.MULTIPLY_ASSIGN, "*=", self.line, self.col - 2))
-                continue
-
-            if ch == "*":
-                self._advance()
-                tokens.append(Token(TokenType.MULTIPLY, "*", self.line, self.col - 1))
-                continue
-
-            if ch == "/" and next_ch == "/":
-                self._advance()
-                self._advance()
-                tokens.append(Token(TokenType.INT_DIVIDE, "//", self.line, self.col - 2))
-                continue
-
-            if ch == "/" and next_ch == "=":
-                self._advance()
-                self._advance()
-                tokens.append(Token(TokenType.DIVIDE_ASSIGN, "/=", self.line, self.col - 2))
-                continue
-
-            if ch == "/":
-                self._advance()
-                tokens.append(Token(TokenType.DIVIDE, "/", self.line, self.col - 1))
-                continue
-
-            if ch == "%":
-                self._advance()
-                tokens.append(Token(TokenType.MODULO, "%", self.line, self.col - 1))
-                continue
-
-            if ch == "=" and next_ch == "=":
-                self._advance()
-                self._advance()
-                tokens.append(Token(TokenType.EQUAL, "==", self.line, self.col - 2))
-                continue
-
-            if ch == "=":
-                self._advance()
-                tokens.append(Token(TokenType.ASSIGN, "=", self.line, self.col - 1))
-                continue
-
-            if ch == "!" and next_ch == "=":
-                self._advance()
-                self._advance()
-                tokens.append(Token(TokenType.NOT_EQUAL, "!=", self.line, self.col - 2))
-                continue
-
-            if ch == "<" and next_ch == "=":
-                self._advance()
-                self._advance()
-                tokens.append(Token(TokenType.LESS_EQUAL, "<=", self.line, self.col - 2))
-                continue
-
-            if ch == "<":
-                self._advance()
-                tokens.append(Token(TokenType.LESS, "<", self.line, self.col - 1))
-                continue
-
-            if ch == ">" and next_ch == "=":
-                self._advance()
-                self._advance()
-                tokens.append(Token(TokenType.GREATER_EQUAL, ">=", self.line, self.col - 2))
-                continue
-
-            if ch == ">":
-                self._advance()
-                tokens.append(Token(TokenType.GREATER, ">", self.line, self.col - 1))
-                continue
-
-            if ch == "(":
-                self._advance()
-                tokens.append(Token(TokenType.LPAREN, "(", self.line, self.col - 1))
-                continue
-
-            if ch == ")":
-                self._advance()
-                tokens.append(Token(TokenType.RPAREN, ")", self.line, self.col - 1))
-                continue
-
-            if ch == ":":
-                self._advance()
-                tokens.append(Token(TokenType.COLON, ":", self.line, self.col - 1))
-                continue
-
-            if ch == ",":
-                self._advance()
-                tokens.append(Token(TokenType.COMMA, ",", self.line, self.col - 1))
-                continue
-
-            raise LexerError(f"未知字符: {ch!r}", self.line, self.col, self.filename)
-
+        # Close all indent levels
         while len(self.indent_stack) > 1:
             self.indent_stack.pop()
-            tokens.append(Token(TokenType.DEDENT, 0, self.line, self.col))
+            tokens.append(Token(TokenType.DEDENT, 0, len(lines), 1))
 
-        tokens.append(Token(TokenType.EOF, None, self.line, self.col))
+        tokens.append(Token(TokenType.EOF, None, len(lines), 1))
         return tokens
