@@ -154,14 +154,16 @@ class Interpreter:
                 self.runtime.set_jump(caller)
 
         elif isinstance(stmt, VarStmt):
-            if stmt.name == "__break__":
-                self.runtime.set_jump("__break__")
-            elif stmt.name == "__continue__":
-                self.runtime.set_jump("__continue__")
-            elif stmt.value:
+            if stmt.value:
                 self.runtime.set(stmt.name, self._eval_expr(stmt.value))
             else:
                 self.runtime.set(stmt.name, None)
+
+        elif isinstance(stmt, BreakStmt):
+            self.runtime.set_jump("__break__")
+
+        elif isinstance(stmt, ContinueStmt):
+            self.runtime.set_jump("__continue__")
 
         elif isinstance(stmt, SetStmt):
             value = self._eval_expr(stmt.value)

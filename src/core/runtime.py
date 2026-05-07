@@ -79,7 +79,7 @@ class Runtime:
     def queue_interact(self, actions: list, fallbacks: list):
         self.pending_interact = {"actions": actions, "fallbacks": fallbacks}
 
-    def clear_pending(self):
+    def clear_pending_dialogues(self):
         self.pending_dialogues = []
         self.pending_input = None
         self.pending_interact = None
@@ -94,9 +94,7 @@ class Runtime:
         self._load_slot = slot
 
     def clear_pending(self):
-        self.pending_dialogues = []
-        self.pending_input = None
-        self.pending_interact = None
+        self.clear_pending_dialogues()
         self.pending_jump = None
         self.pending_save = False
         self.pending_load = False

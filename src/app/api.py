@@ -97,23 +97,35 @@ class GameRunner:
             log_func=_log,
         )
 
-    def _resolve_resource_path(self, path: str) -> str:
+    def _resolve_resource_path(self, path: str, as_data_url: bool = False) -> str:
         if not path:
             return ""
         if Path(path).is_absolute():
-            return Path(path).as_posix()
-        if self._script_dir:
-            resolved = self._script_dir.parent / path
+            target = Path(path)
+        elif self._script_dir:
+            target = (self._script_dir.parent / path).resolve()
         else:
-            resolved = Path(path)
-        return resolved.as_posix() if resolved.exists() else ""
+            target = Path(path).resolve()
+        if not target.exists():
+            return ""
+        if not as_data_url:
+            return target.as_posix()
+        try:
+            import base64
+            ext = target.suffix.lower()
+            mime_map = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp"}
+            mime = mime_map.get(ext, "image/png")
+            data = base64.b64encode(target.read_bytes()).decode()
+            return f"data:{mime};base64,{data}"
+        except Exception:
+            return ""
 
     def _show_dialogue(self, char_name, text):
         if char_name:
             char = self.runtime.characters.get(char_name)
             name = char.name if char else char_name
             color = char.color if char else ""
-            avatar = self._resolve_resource_path(char.avatar) if char else ""
+            avatar = self._resolve_resource_path(char.avatar, as_data_url=True) if char and char.avatar else ""
         else:
             name = ""
             color = ""
@@ -145,7 +157,16 @@ class GameRunner:
         self.reset()
         self.load_script(script_path)
         self.runtime.running = True
-        self.interp = Interpreter(runtime=self.runtime, ai_config={"provider": ai_provider}, script_dir=self._script_dir)
+        ai_config = {"provider": ai_provider}
+        models = config_store.get_ai_models()
+        for m in models:
+            if m.get("provider") == ai_provider:
+                ai_config["model"] = m.get("model", "")
+                ai_config["api_key"] = m.get("api_key", "")
+                if m.get("base_url"):
+                    ai_config["url"] = m["base_url"]
+                break
+        self.interp = Interpreter(runtime=self.runtime, ai_config=ai_config, script_dir=self._script_dir)
         self.interp._collect_labels(self.program)
         self._python_scope["qf"] = self.interp.qf_ctx
         self._run_program()
@@ -247,7 +268,7 @@ class GameRunner:
 
         elif isinstance(stmt, ast_mod.BgStmt):
             self.interp._execute(stmt)
-            resolved = self._resolve_resource_path(stmt.path) if stmt.path else ""
+            resolved = self._resolve_resource_path(stmt.path, as_data_url=True) if stmt.path else ""
             self._ui_call("setBackground", resolved)
 
         elif isinstance(stmt, ast_mod.DialogueStmt):
@@ -279,12 +300,15 @@ class GameRunner:
                 _log("I", "return", f"will resume at {label}[{resume_idx}]")
 
         elif isinstance(stmt, ast_mod.VarStmt):
-            if stmt.name == "__break__" or stmt.name == "__continue__":
-                self.interp._execute(stmt)
-            else:
-                val = self.interp._eval_expr(stmt.value) if stmt.value else None
-                _log("I", "var", f"{stmt.name} = {val}")
-                self.runtime.set(stmt.name, val)
+            val = self.interp._eval_expr(stmt.value) if stmt.value else None
+            _log("I", "var", f"{stmt.name} = {val}")
+            self.runtime.set(stmt.name, val)
+
+        elif isinstance(stmt, ast_mod.BreakStmt):
+            self.runtime.set_jump("__break__")
+
+        elif isinstance(stmt, ast_mod.ContinueStmt):
+            self.runtime.set_jump("__continue__")
 
         elif isinstance(stmt, ast_mod.SetStmt):
             value = self.interp._eval_expr(stmt.value)

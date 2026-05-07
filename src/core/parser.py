@@ -95,10 +95,10 @@ class Parser:
             return self._parse_include()
         elif tok.type == TokenType.BREAK:
             self._advance()
-            return VarStmt(name="__break__", line=tok.line, col=tok.col)
+            return BreakStmt(line=tok.line, col=tok.col)
         elif tok.type == TokenType.CONTINUE:
             self._advance()
-            return VarStmt(name="__continue__", line=tok.line, col=tok.col)
+            return ContinueStmt(line=tok.line, col=tok.col)
         elif tok.type == TokenType.DEDENT:
             return None
         elif tok.type == TokenType.END:

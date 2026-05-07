@@ -184,3 +184,13 @@ class PythonBlockStmt(Stmt):
 @dataclass
 class IncludeStmt(Stmt):
     path: str = ""
+
+
+@dataclass
+class BreakStmt(Stmt):
+    pass
+
+
+@dataclass
+class ContinueStmt(Stmt):
+    pass

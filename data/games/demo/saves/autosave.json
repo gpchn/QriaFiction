@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "timestamp": 1778172169.5686688,
-  "playtime": 14.430545568466187,
+  "timestamp": 1778173253.068089,
+  "playtime": 22.668230533599854,
   "variables": {
     "player_name": "123",
     "relationship": 40,
@@ -9,8 +9,8 @@
     "gold": 60.0,
     "day": 1,
     "i": 3,
-    "dice_roll": 3,
-    "bonus_points": 30
+    "dice_roll": 6,
+    "bonus_points": 60
   },
   "background": null,
   "current_label": "demo_system",

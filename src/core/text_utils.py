@@ -16,8 +16,19 @@ def interpolate_text(
             scope = {"qf": qf_ctx}
             if python_scope:
                 scope.update(python_scope)
+            safe_scope = dict(scope)
+            safe_scope["__builtins__"] = {
+                "abs": abs, "bool": bool, "int": int, "float": float,
+                "str": str, "len": len, "list": list, "dict": dict,
+                "tuple": tuple, "set": set, "range": range, "enumerate": enumerate,
+                "zip": zip, "map": map, "filter": filter, "sorted": sorted,
+                "min": min, "max": max, "sum": sum, "round": round,
+                "repr": repr, "type": type, "isinstance": isinstance,
+                "join": lambda sep, items: sep.join(str(i) for i in items),
+                "true": True, "false": False, "null": None,
+            }
             try:
-                return str(eval(code, scope))
+                return str(eval(code, safe_scope))
             except Exception:
                 return match.group(0)
 
@@ -42,8 +53,19 @@ def interpolate_text_with_logging(
             scope = {"qf": qf_ctx}
             if python_scope:
                 scope.update(python_scope)
+            safe_scope = dict(scope)
+            safe_scope["__builtins__"] = {
+                "abs": abs, "bool": bool, "int": int, "float": float,
+                "str": str, "len": len, "list": list, "dict": dict,
+                "tuple": tuple, "set": set, "range": range, "enumerate": enumerate,
+                "zip": zip, "map": map, "filter": filter, "sorted": sorted,
+                "min": min, "max": max, "sum": sum, "round": round,
+                "repr": repr, "type": type, "isinstance": isinstance,
+                "join": lambda sep, items: sep.join(str(i) for i in items),
+                "true": True, "false": False, "null": None,
+            }
             try:
-                return str(eval(code, scope))
+                return str(eval(code, safe_scope))
             except Exception:
                 return match.group(0)
 

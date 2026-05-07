@@ -56,9 +56,22 @@ class Lexer:
             if ch == "'":
                 j = i + 1
                 parts = []
-                while j < len(text) and text[j] != "'":
-                    parts.append(text[j])
-                    j += 1
+                while j < len(text):
+                    if text[j] == "\\":
+                        j += 1
+                        if j < len(text):
+                            e = text[j]
+                            if e == "n": parts.append("\n")
+                            elif e == "t": parts.append("\t")
+                            elif e == "\\": parts.append("\\")
+                            elif e == "'": parts.append("'")
+                            else: parts.extend(["\\", e])
+                        j += 1
+                    elif text[j] == "'":
+                        break
+                    else:
+                        parts.append(text[j])
+                        j += 1
                 tokens.append(Token(TokenType.STRING, "".join(parts), line_num, col_offset + i))
                 i = j + 1
                 continue

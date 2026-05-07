@@ -293,9 +293,8 @@ window.addEventListener('pywebviewready', () => {
                 const bgLayer = document.getElementById('bgLayer');
                 const overlay = document.getElementById('bgOverlay');
                 if (path) {
-                    const url = path.startsWith('file://') ? path : `file://${path}`;
                     if (bgLayer) {
-                        bgLayer.style.backgroundImage = `url('${url}')`;
+                        bgLayer.style.backgroundImage = `url('${path}')`;
                         bgLayer.style.opacity = '1';
                     }
                     if (overlay) overlay.style.opacity = '0.3';
