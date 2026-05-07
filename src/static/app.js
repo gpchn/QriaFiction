@@ -41,9 +41,9 @@ window.addEventListener('pywebviewready', () => {
                 return r.data;
             }
 
-            const modal = ref({ show: false, title: '', body: '', onOk: () => {} });
-            function openModal(title, body, onOk) {
-                modal.value = { show: true, title, body, onOk: onOk || (() => {}) };
+            const modal = ref({ show: false, title: '', type: '', projectTitle: '', confirm: () => {} });
+            function openModal(title, type, data, onConfirm) {
+                modal.value = { show: true, title, type, projectTitle: data?.title || '', confirm: onConfirm || (() => {}) };
             }
 
             function toggleTheme() { applyTheme(!isDark.value); }
@@ -71,9 +71,7 @@ window.addEventListener('pywebviewready', () => {
             }
 
             function openImport() {
-                openModal('导入项目',
-                    '<label class="text-[13px] block mb-1.5" style="color:var(--fg-m)">ZIP 文件路径</label>' +
-                    '<input id="m-zip" class="w-full h-10 px-3 text-[14px] rounded" style="background:var(--s2);border:1px solid var(--line);color:var(--fg)" placeholder="C:\\path\\to\\project.zip">',
+                openModal('导入项目', 'import', null,
                     async () => {
                         const v = (document.getElementById('m-zip') || {}).value?.trim();
                         if (!v) { toast('请输入路径', 'error'); return; }
@@ -83,8 +81,7 @@ window.addEventListener('pywebviewready', () => {
             }
 
             function askDelete(p) {
-                openModal('删除项目',
-                    '<p class="text-[14px]" style="color:var(--fg-m)">确定删除「' + (p.title || p.name) + '」？</p>',
+                openModal('删除项目', 'delete', { title: p.title || p.name },
                     async () => {
                         try { ok(await pywebview.api.delete_project(p.id)); await loadProjects(); toast('已删除'); }
                         catch (e) { toast(e.message, 'error'); }
@@ -105,19 +102,7 @@ window.addEventListener('pywebviewready', () => {
             }
 
             function openAddModel() {
-                const inp = (id, ph, type) =>
-                    '<div><label class="text-[13px] block mb-1.5" style="color:var(--fg-m)">' + ph + '</label>' +
-                    '<input id="' + id + '" type="' + (type||'text') + '" class="w-full h-10 px-3 text-[14px] rounded" style="background:var(--s2);border:1px solid var(--line);color:var(--fg)" placeholder="' + ph + '"></div>';
-                openModal('添加模型',
-                    '<div class="space-y-3">' +
-                    inp('m-name', '名称') +
-                    '<div><label class="text-[13px] block mb-1.5" style="color:var(--fg-m)">提供商</label>' +
-                    '<select id="m-prov" class="w-full h-10 px-3 text-[14px] rounded" style="background:var(--s2);border:1px solid var(--line);color:var(--fg)">' +
-                    '<option value="openai">OpenAI</option><option value="deepseek">DeepSeek</option></select></div>' +
-                    inp('m-model', '模型标识') +
-                    inp('m-key', 'API Key', 'password') +
-                    inp('m-base', 'Base URL（可选）') +
-                    '</div>',
+                openModal('添加模型', 'addModel', null,
                     async () => {
                         const v = id => (document.getElementById(id) || {}).value?.trim() || '';
                         const d = { name: v('m-name'), provider: v('m-prov'), model: v('m-model'), api_key: v('m-key'), base_url: v('m-base') };
@@ -344,6 +329,26 @@ window.addEventListener('pywebviewready', () => {
 
             onMounted(() => {
                 Promise.all([loadProjects(), loadModels(), loadCfg()]);
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape' && modal.value.show) {
+                        modal.value.show = false;
+                    }
+                    if (e.key === 'Escape' && saveManagerOpen.value) {
+                        saveManagerOpen.value = false;
+                    }
+                    if (e.key === 'Enter' && modal.value.show) {
+                        modal.value.confirm();
+                        modal.value.show = false;
+                    }
+                    if (e.key === 'Enter' && view.value === 'game' && gameInputEnabled.value) {
+                        sendInput();
+                    }
+                    if (e.key === ' ' && showContinueHint.value && view.value === 'game') {
+                        e.preventDefault();
+                        showContinueHint.value = false;
+                        pywebview.api.continue_game();
+                    }
+                });
             });
 
             return {

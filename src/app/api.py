@@ -18,12 +18,8 @@ def _log(level, tag, *args):
     reset = "\033[0m"
     c = colors.get(level, "")
     print(f"{c}[{level}][{tag}]{reset} {msg}")
-    if level == "E":
-        app_logger.error(f"[{tag}] {msg}")
-    elif level == "W":
-        app_logger.warn(f"[{tag}] {msg}")
-    else:
-        app_logger.debug(f"[{tag}] {msg}")
+    log_map = {"E": app_logger.error, "W": app_logger.warn, "I": app_logger.info, "D": app_logger.debug}
+    log_map.get(level, app_logger.debug)(f"[{tag}] {msg}")
 
 
 class GameRunner:
@@ -290,12 +286,6 @@ class GameRunner:
             self.runtime.set(stmt.name, user_text)
             _log("I", "input", f"stored {stmt.name}={user_text}")
 
-        elif isinstance(stmt, ast_mod.IfStmt):
-            pass
-
-        elif isinstance(stmt, ast_mod.WhileStmt):
-            pass
-
         elif isinstance(stmt, ast_mod.WaitStmt):
             if stmt.is_click:
                 self._wait_for_continue()
@@ -312,13 +302,12 @@ class GameRunner:
         elif isinstance(stmt, ast_mod.QuitStmt):
             pass
 
-        elif isinstance(stmt, ast_mod.PythonBlockStmt):
-            if self.runtime.pending_jump:
-                _log("I", "python", f"jump -> {self.runtime.pending_jump}")
-
         elif isinstance(stmt, ast_mod.IncludeStmt):
             self._last_include_stmt = stmt
             self._exec_include()
+
+        # IfStmt/WhileStmt/BreakStmt/ContinueStmt/VarStmt/SetStmt/PythonBlockStmt:
+        # handled entirely by Interpreter._execute(), no GameRunner callback needed
 
     def _exec_include(self):
         import core.ast as ast_mod

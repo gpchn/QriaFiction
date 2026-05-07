@@ -14,6 +14,11 @@ dependencies = [
 [project.scripts]
 qriafiction = "src.main:main"
 
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+]
+
 [[tool.uv.index]]
 url = "https://pypi.mirrors.ustc.edu.cn/simple/"
 default = true

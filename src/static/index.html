@@ -433,12 +433,36 @@
             <div class="px-5 pt-5 pb-3">
                 <div class="text-[14px] font-semibold" style="color:var(--fg)">{{ modal.title }}</div>
             </div>
-            <div class="px-5 pb-4" v-html="modal.body"></div>
+            <div class="px-5 pb-4">
+                <!-- Import Project -->
+                <template v-if="modal.type === 'import'">
+                    <label class="text-[13px] block mb-1.5" style="color:var(--fg-m)">ZIP 文件路径</label>
+                    <input id="m-zip" class="w-full h-10 px-3 text-[14px] rounded" style="background:var(--s2);border:1px solid var(--line);color:var(--fg)" placeholder="C:\path\to\project.zip">
+                </template>
+                <!-- Delete Project -->
+                <template v-if="modal.type === 'delete'">
+                    <p class="text-[14px]" style="color:var(--fg-m)">确定删除「{{ modal.projectTitle }}」？</p>
+                </template>
+                <!-- Add AI Model -->
+                <template v-if="modal.type === 'addModel'">
+                    <div class="space-y-3">
+                        <div><label class="text-[13px] block mb-1.5" style="color:var(--fg-m)">名称</label><input id="m-name" class="w-full h-10 px-3 text-[14px] rounded" style="background:var(--s2);border:1px solid var(--line);color:var(--fg)" placeholder="名称"></div>
+                        <div><label class="text-[13px] block mb-1.5" style="color:var(--fg-m)">提供商</label><select id="m-prov" class="w-full h-10 px-3 text-[14px] rounded" style="background:var(--s2);border:1px solid var(--line);color:var(--fg)"><option value="openai">OpenAI</option><option value="deepseek">DeepSeek</option></select></div>
+                        <div><label class="text-[13px] block mb-1.5" style="color:var(--fg-m)">模型标识</label><input id="m-model" class="w-full h-10 px-3 text-[14px] rounded" style="background:var(--s2);border:1px solid var(--line);color:var(--fg)" placeholder="模型标识"></div>
+                        <div><label class="text-[13px] block mb-1.5" style="color:var(--fg-m)">API Key</label><input id="m-key" type="password" class="w-full h-10 px-3 text-[14px] rounded" style="background:var(--s2);border:1px solid var(--line);color:var(--fg)" placeholder="API Key"></div>
+                        <div><label class="text-[13px] block mb-1.5" style="color:var(--fg-m)">Base URL（可选）</label><input id="m-base" class="w-full h-10 px-3 text-[14px] rounded" style="background:var(--s2);border:1px solid var(--line);color:var(--fg)" placeholder="Base URL"></div>
+                    </div>
+                </template>
+                <!-- Generic HTML body fallback -->
+                <template v-if="modal.type === 'html'">
+                    <div v-html="modal.body"></div>
+                </template>
+            </div>
             <div class="flex gap-2 px-5 pb-5">
                 <button @click="modal.show=false"
                     class="flex-1 h-10 text-[13px] font-medium rounded transition-colors"
                     style="border:1px solid var(--line);color:var(--fg-m)">取消</button>
-                <button @click="modal.onOk();modal.show=false"
+                <button @click="modal.confirm();modal.show=false"
                     class="flex-1 h-10 text-[13px] font-semibold rounded transition-opacity hover:opacity-80"
                     style="background:var(--accent);color:var(--s0)">确认</button>
             </div>
