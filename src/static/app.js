@@ -99,6 +99,7 @@ window.addEventListener('pywebviewready', () => {
                     view.value = 'game';
                     messages.value = [];
                     gameStatus.value = '运行中...';
+                    saveSlots.value = [];
                 }
                 catch (e) { toast(e.message, 'error'); }
             }
@@ -153,6 +154,10 @@ window.addEventListener('pywebviewready', () => {
             const msgContainer = ref(null);
             const showContinueHint = ref(false);
 
+            const saveManagerOpen = ref(false);
+            const saveSlots = ref([]);
+            const newSaveName = ref('');
+
             function addMsg(type, text, name, color, avatar) {
                 messages.value.push({ type, text, name: name || '', color: color || '', avatar: avatar || '' });
             }
@@ -184,7 +189,17 @@ window.addEventListener('pywebviewready', () => {
                 gameInputEnabled.value = false;
                 gameProjectName.value = '';
                 showContinueHint.value = false;
+                saveManagerOpen.value = false;
+                saveSlots.value = [];
+                window.setBackground('');
                 await loadProjects();
+            }
+
+            async function reloadScript() {
+                try {
+                    ok(await pywebview.api.reload_script());
+                    toast('脚本已重载');
+                } catch (e) { toast(e.message, 'error'); }
             }
 
             function onMsgAreaClick() {
@@ -220,20 +235,94 @@ window.addEventListener('pywebviewready', () => {
                 }
             }
 
+            function formatTime(ts) {
+                if (!ts) return '未知时间';
+                const d = new Date(ts * 1000);
+                return d.toLocaleDateString('zh-CN') + ' ' + d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+            }
+
+            function formatPlaytime(seconds) {
+                if (!seconds) return '';
+                const m = Math.floor(seconds / 60);
+                const h = Math.floor(m / 60);
+                if (h > 0) return `${h}小时${m % 60}分`;
+                return `${m}分`;
+            }
+
+            async function openSaveManager() {
+                try {
+                    const slots = ok(await pywebview.api.get_save_slots()) || [];
+                    saveSlots.value = slots;
+                    saveManagerOpen.value = true;
+                } catch (e) { toast(e.message, 'error'); }
+            }
+
+            async function doSave(name) {
+                try {
+                    ok(await pywebview.api.save_game(name));
+                    toast('已保存');
+                    const slots = ok(await pywebview.api.get_save_slots()) || [];
+                    saveSlots.value = slots;
+                } catch (e) { toast(e.message, 'error'); }
+            }
+
+            async function doLoad(name) {
+                try {
+                    ok(await pywebview.api.load_game(name));
+                    saveManagerOpen.value = false;
+                } catch (e) { toast(e.message, 'error'); }
+            }
+
+            async function deleteSave(name) {
+                try {
+                    const api = pywebview.api;
+                    if (api.delete_save) {
+                        ok(await api.delete_save(name));
+                    } else {
+                        const path = `saves/${name}.json`;
+                        ok(await api.remove_save_file(path));
+                    }
+                    const slots = ok(await pywebview.api.get_save_slots()) || [];
+                    saveSlots.value = slots;
+                    toast('已删除存档');
+                } catch (e) { toast(e.message, 'error'); }
+            }
+
             window.addMessage = addMsg;
-            window.setBackground = () => {};
+            window.setBackground = (path) => {
+                const bgLayer = document.getElementById('bgLayer');
+                const overlay = document.getElementById('bgOverlay');
+                if (path) {
+                    const url = path.startsWith('file://') ? path : `file://${path}`;
+                    if (bgLayer) {
+                        bgLayer.style.backgroundImage = `url('${url}')`;
+                        bgLayer.style.opacity = '1';
+                    }
+                    if (overlay) overlay.style.opacity = '0.3';
+                } else {
+                    if (bgLayer) {
+                        bgLayer.style.backgroundImage = '';
+                        bgLayer.style.opacity = '0';
+                    }
+                    if (overlay) overlay.style.opacity = '0.7';
+                }
+            };
             window.setStatus = (t) => { gameStatus.value = t; };
             window.getUserInput = (prompt) => {
                 gameStatus.value = prompt;
                 gamePlaceholder.value = prompt;
                 enableInput(true);
             };
-            window.handleInteract = (prompt, actions, fallbacks) => {
+            window.handleInteract = (prompt, fallbacks) => {
                 gameStatus.value = prompt || '你想做什么？';
                 gamePlaceholder.value = prompt || '输入...';
                 enableInput(true);
             };
             window.showContinue = () => {
+                showContinueHint.value = true;
+            };
+            window.showSaveMessage = (msg) => {
+                addMsg('system', msg, '', '', '');
                 showContinueHint.value = true;
             };
 
@@ -257,8 +346,11 @@ window.addEventListener('pywebviewready', () => {
                 openAddModel, removeModel, saveCfg,
                 gameStatus, gameLoading, gameInputEnabled, gameInput, gamePlaceholder, gameProjectName,
                 messages, msgContainer, showContinueHint,
-                sendInput, backToLauncher, onMsgAreaClick,
+                saveManagerOpen, saveSlots, newSaveName,
+                sendInput, backToLauncher, reloadScript, onMsgAreaClick,
                 contrastColor, colorBubble,
+                openSaveManager, doSave, doLoad, deleteSave,
+                formatTime, formatPlaytime,
             };
         },
     }).mount('#app');

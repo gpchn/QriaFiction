@@ -2,7 +2,7 @@ import random
 from pathlib import Path
 
 from core.ast import *
-from core.runtime import Runtime
+from core.runtime import Runtime, Character
 from core.ai_engine import AIEngine
 from core.errors import RuntimeError as QFRuntimeError
 from core.text_utils import interpolate_text
@@ -39,19 +39,23 @@ class QriaContext:
     def set_bg(self, path: str):
         self.runtime.background = path
 
-    def save(self):
+    def save(self, slot: str = "autosave"):
+        self.runtime._save_slot = slot
         self.runtime.pending_save = True
 
-    def load(self):
+    def load(self, slot: str = "autosave"):
+        self.runtime._load_slot = slot
         self.runtime.pending_load = True
 
 
 class Interpreter:
-    def __init__(self, runtime: Runtime = None, ai_config: dict = None):
+    def __init__(self, runtime: Runtime = None, ai_config: dict = None, script_dir: Path = None):
         self.runtime = runtime or Runtime()
         self.ai_engine = AIEngine(ai_config)
         self.labels: dict[str, list] = {}
         self.qf_ctx = QriaContext(self.runtime)
+        self.script_dir = script_dir
+        self._source_cache: dict[str, list[str]] = {}
 
     def run(self, program: Program):
         self._collect_labels(program)
@@ -214,7 +218,33 @@ class Interpreter:
             self._execute_python(stmt.code)
 
         elif isinstance(stmt, IncludeStmt):
-            pass
+            self._execute_include(stmt.path)
+
+    def _execute_include(self, path: str):
+        if self.script_dir:
+            target = self.script_dir / path
+        else:
+            target = Path(path)
+
+        if not target.exists():
+            raise QFRuntimeError(f"无法加载脚本文件: {path}")
+
+        from core.lexer import Lexer
+        from core.parser import Parser
+
+        src = target.read_text(encoding="utf-8")
+        self._source_cache[str(target)] = src.split("\n")
+        lexer = Lexer(src, str(target))
+        tokens = lexer.tokenize()
+        parser = Parser(tokens, str(target))
+        included_program = parser.parse()
+
+        self._collect_labels(included_program)
+        for stmt in included_program.statements:
+            if not isinstance(stmt, LabelStmt):
+                self._execute(stmt)
+                if self.runtime.pending_jump or self.runtime.pending_dialogues or self.runtime.pending_input or self.runtime.pending_save or self.runtime.pending_load:
+                    return
 
     def _execute_python(self, code: str):
         scope = {"qf": self.qf_ctx}
@@ -280,3 +310,10 @@ class Interpreter:
             if expr.operator == "-":
                 return -operand if operand is not None else 0
         raise QFRuntimeError(f"无法计算表达式: {expr}")
+
+    def get_source_line(self, filename: str, line_num: int) -> str:
+        if filename in self._source_cache:
+            lines = self._source_cache[filename]
+            if 0 < line_num <= len(lines):
+                return lines[line_num - 1]
+        return ""

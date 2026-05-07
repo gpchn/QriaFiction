@@ -1,4 +1,6 @@
+import json
 import time
+from pathlib import Path
 
 
 class Character:
@@ -7,8 +9,22 @@ class Character:
         self.avatar = avatar
         self.color = color
 
+    def to_dict(self):
+        return {"name": self.name, "avatar": self.avatar, "color": self.color}
+
+    @classmethod
+    def from_dict(cls, data):
+        return cls(name=data["name"], avatar=data["avatar"], color=data["color"])
+
 
 class Runtime:
+    SAVE_DIR = None
+
+    @classmethod
+    def init_save_dir(cls, save_dir: Path):
+        cls.SAVE_DIR = save_dir
+        cls.SAVE_DIR.mkdir(parents=True, exist_ok=True)
+
     def __init__(self):
         self.variables: dict = {}
         self.characters: dict[str, Character] = {}
@@ -26,6 +42,8 @@ class Runtime:
         self.pending_save = False
         self.pending_load = False
         self.pending_quit = False
+        self._save_slot: str = "autosave"
+        self._load_slot: str = "autosave"
 
     def get(self, name: str):
         if name.startswith("_"):
@@ -68,3 +86,47 @@ class Runtime:
 
     def set_jump(self, label: str):
         self.pending_jump = label
+
+    def set_save_slot(self, slot: str):
+        self._save_slot = slot
+
+    def set_load_slot(self, slot: str):
+        self._load_slot = slot
+
+    def clear_pending(self):
+        self.pending_dialogues = []
+        self.pending_input = None
+        self.pending_interact = None
+        self.pending_jump = None
+        self.pending_save = False
+        self.pending_load = False
+        self.pending_quit = False
+
+    def save_game(self, slot: str | None = None) -> dict:
+        slot = slot or self._save_slot
+        save_data = {
+            "version": 1,
+            "timestamp": time.time(),
+            "playtime": time.time() - self._start_time,
+            "variables": self.variables.copy(),
+            "background": self.background,
+            "current_label": self.current_label,
+            "call_stack": self.call_stack.copy(),
+            "characters": {k: v.to_dict() for k, v in self.characters.items()},
+        }
+        return save_data
+
+    def load_game(self, save_data: dict) -> bool:
+        if not save_data:
+            return False
+        self.variables = save_data.get("variables", {})
+        self.background = save_data.get("background")
+        self.current_label = save_data.get("current_label", "")
+        self.call_stack = save_data.get("call_stack", [])
+        self._start_time = time.time() - save_data.get("playtime", 0)
+
+        self.characters.clear()
+        for k, v in save_data.get("characters", {}).items():
+            self.add_character(k, Character.from_dict(v))
+
+        return True

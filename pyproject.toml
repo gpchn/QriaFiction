@@ -5,6 +5,7 @@ description = "Interactive Fiction Engine"
 requires-python = ">=3.12"
 dependencies = [
     "fuzzywuzzy>=0.18.0",
+    "openai>=2.35.1",
     "pywebview>=6.2.1",
     "toml>=0.10.2",
 ]

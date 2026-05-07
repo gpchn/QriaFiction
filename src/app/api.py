@@ -8,7 +8,7 @@ from app.api_decorators import api_method, ApiError
 from core.lexer import Lexer
 from core.parser import Parser
 from core.interpreter import Interpreter
-from core.runtime import Runtime
+from core.runtime import Runtime, Character
 from core.text_utils import interpolate_text_with_logging
 
 
@@ -40,6 +40,8 @@ class GameRunner:
         self._lock = threading.Lock()
         self._return_stack = []
         self._current_index = 0
+        self._script_dir = None
+        self._save_dir = None
 
     def is_running(self):
         return self._running
@@ -63,10 +65,16 @@ class GameRunner:
             self._python_scope = {}
             self._return_stack = []
             self._current_index = 0
+            self._script_dir = None
+            self._save_dir = None
 
     def load_script(self, path: str):
         _log("I", "load", f"path={path}")
         src = Path(path).read_text(encoding="utf-8")
+        self._script_dir = Path(path).parent
+        self._save_dir = self._script_dir.parent / "saves"
+        self._save_dir.mkdir(parents=True, exist_ok=True)
+        Runtime.init_save_dir(self._save_dir)
         lexer = Lexer(src, path)
         tokens = lexer.tokenize()
         _log("I", "load", f"tokens={len(tokens)}")
@@ -89,12 +97,23 @@ class GameRunner:
             log_func=_log,
         )
 
+    def _resolve_resource_path(self, path: str) -> str:
+        if not path:
+            return ""
+        if Path(path).is_absolute():
+            return Path(path).as_posix()
+        if self._script_dir:
+            resolved = self._script_dir.parent / path
+        else:
+            resolved = Path(path)
+        return resolved.as_posix() if resolved.exists() else ""
+
     def _show_dialogue(self, char_name, text):
         if char_name:
             char = self.runtime.characters.get(char_name)
             name = char.name if char else char_name
             color = char.color if char else ""
-            avatar = char.avatar if char else ""
+            avatar = self._resolve_resource_path(char.avatar) if char else ""
         else:
             name = ""
             color = ""
@@ -126,8 +145,9 @@ class GameRunner:
         self.reset()
         self.load_script(script_path)
         self.runtime.running = True
-        self.interp = Interpreter(runtime=self.runtime, ai_config={"provider": ai_provider})
+        self.interp = Interpreter(runtime=self.runtime, ai_config={"provider": ai_provider}, script_dir=self._script_dir)
         self.interp._collect_labels(self.program)
+        self._python_scope["qf"] = self.interp.qf_ctx
         self._run_program()
         _log("I", "start", "finished")
         self._running = False
@@ -135,17 +155,20 @@ class GameRunner:
     def _run_program(self):
         import core.ast as ast_mod
 
+        non_label_stmts = []
         for stmt in self.program.statements:
             if isinstance(stmt, ast_mod.LabelStmt):
                 continue
-            self._exec_stmt(stmt)
+            non_label_stmts.append(stmt)
+
+        if non_label_stmts:
+            _log("I", "run", f"executing {len(non_label_stmts)} top-level statements")
+            self._exec_block(non_label_stmts)
             if not self.runtime.running:
                 return
 
         if "start" in self.interp.labels:
             self._exec_label("start")
-        else:
-            self._exec_block(self.program.statements)
 
     def _exec_label(self, label_name: str, resume_from: int = 0):
         _log("I", "label", f"{label_name} (resume={resume_from})")
@@ -181,6 +204,33 @@ class GameRunner:
                 self._exec_label(target)
                 return
 
+            if self.runtime.pending_save:
+                self.runtime.pending_save = False
+                self._do_save()
+                # 恢复执行，继续下一条语句
+                i += 1
+                continue
+
+            if self.runtime.pending_load:
+                self.runtime.pending_load = False
+                self._do_load()
+                # 读档后跳转到存档时的标签
+                if self.runtime.pending_jump:
+                    target = self.runtime.pending_jump
+                    self.runtime.pending_jump = None
+                    if target == "__break__" or target == "__continue__":
+                        return
+                    if self._return_stack:
+                        label, resume_idx = self._return_stack.pop()
+                        _log("I", "return", f"-> {label}[{resume_idx}]")
+                        self._exec_label(label, resume_from=resume_idx)
+                        return
+                    self._exec_label(target)
+                    return
+                # 否则继续执行
+                i += 1
+                continue
+
             if self.runtime.pending_quit:
                 self._show_dialogue(None, "故事结束")
                 self.runtime.running = False
@@ -192,18 +242,13 @@ class GameRunner:
         import core.ast as ast_mod
 
         if isinstance(stmt, ast_mod.DefineCharacterStmt):
-            from core.runtime import Character
             _log("I", "char", f"define {stmt.name}")
-            self.runtime.add_character(stmt.name, Character(
-                name=stmt.display_name,
-                avatar=stmt.avatar,
-                color=stmt.color,
-            ))
+            self.interp._execute(stmt)
 
         elif isinstance(stmt, ast_mod.BgStmt):
-            _log("I", "bg", stmt.path)
-            self.runtime.background = stmt.path
-            self._ui_call("setBackground", stmt.path or "")
+            self.interp._execute(stmt)
+            resolved = self._resolve_resource_path(stmt.path) if stmt.path else ""
+            self._ui_call("setBackground", resolved)
 
         elif isinstance(stmt, ast_mod.DialogueStmt):
             self._show_dialogue(stmt.character, stmt.text)
@@ -216,13 +261,7 @@ class GameRunner:
             self.runtime.current_label = stmt.name
 
         elif isinstance(stmt, ast_mod.JumpStmt):
-            if stmt.is_otherwise:
-                self.runtime.set_jump(stmt.target)
-            elif stmt.condition:
-                if self.interp._eval_expr(stmt.condition):
-                    self.runtime.set_jump(stmt.target)
-            else:
-                self.runtime.set_jump(stmt.target)
+            self.interp._execute(stmt)
 
         elif isinstance(stmt, ast_mod.CallStmt):
             if stmt.condition and not self.interp._eval_expr(stmt.condition):
@@ -230,7 +269,7 @@ class GameRunner:
             caller = (self.runtime.current_label, self._current_index + 1)
             self._return_stack.append(caller)
             _log("I", "call", f"push {caller}, jump to {stmt.target}")
-            self.runtime.set_jump(stmt.target)
+            self.interp._execute(stmt)
 
         elif isinstance(stmt, ast_mod.ReturnStmt):
             _log("I", "return", f"return_stack={self._return_stack}")
@@ -240,12 +279,12 @@ class GameRunner:
                 _log("I", "return", f"will resume at {label}[{resume_idx}]")
 
         elif isinstance(stmt, ast_mod.VarStmt):
-            if stmt.value:
-                val = self.interp._eval_expr(stmt.value)
+            if stmt.name == "__break__" or stmt.name == "__continue__":
+                self.interp._execute(stmt)
+            else:
+                val = self.interp._eval_expr(stmt.value) if stmt.value else None
                 _log("I", "var", f"{stmt.name} = {val}")
                 self.runtime.set(stmt.name, val)
-            else:
-                self.runtime.set(stmt.name, None)
 
         elif isinstance(stmt, ast_mod.SetStmt):
             value = self.interp._eval_expr(stmt.value)
@@ -260,7 +299,7 @@ class GameRunner:
             elif stmt.operator == "*=":
                 self.runtime.set(stmt.name, (current or 0) * value)
             elif stmt.operator == "/=":
-                self.runtime.set(stmt.name, (current or 1) / value)
+                self.runtime.set(stmt.name, (current or 1) / value if value else (current or 1))
 
         elif isinstance(stmt, ast_mod.InputStmt):
             user_text = self._wait_for_input(stmt.prompt)
@@ -289,16 +328,23 @@ class GameRunner:
                     return
 
         elif isinstance(stmt, ast_mod.WaitStmt):
-            import time
-            if isinstance(stmt.duration, (int, float)):
+            if stmt.is_click:
+                self._wait_for_continue()
+            elif isinstance(stmt.duration, (int, float)):
+                import time
                 time.sleep(stmt.duration)
+
+        elif isinstance(stmt, ast_mod.SaveStmt):
+            self.runtime.pending_save = True
+
+        elif isinstance(stmt, ast_mod.LoadStmt):
+            self.runtime.pending_load = True
 
         elif isinstance(stmt, ast_mod.QuitStmt):
             self.runtime.pending_quit = True
 
         elif isinstance(stmt, ast_mod.PythonBlockStmt):
             _log("I", "python", stmt.code[:60])
-            self._python_scope["qf"] = self.interp.qf_ctx
             try:
                 exec(stmt.code, self._python_scope)
             except Exception as e:
@@ -308,13 +354,44 @@ class GameRunner:
                 _log("I", "python", f"jump -> {self.runtime.pending_jump}")
 
         elif isinstance(stmt, ast_mod.IncludeStmt):
-            pass
+            self._exec_include(stmt.path)
+
+    def _exec_include(self, path: str):
+        if self._script_dir:
+            target = self._script_dir / path
+        else:
+            target = Path(path)
+
+        if not target.exists():
+            self._show_dialogue(None, f"[错误] 无法加载脚本: {path}")
+            return
+
+        _log("I", "include", f"loading {target}")
+        src = target.read_text(encoding="utf-8")
+        lexer = Lexer(src, str(target))
+        tokens = lexer.tokenize()
+        parser = Parser(tokens, str(target))
+        included_program = parser.parse()
+
+        for s in included_program.statements:
+            if isinstance(s, ast_mod.LabelStmt):
+                if s.name not in self.interp.labels:
+                    self.interp.labels[s.name] = s.body
+            else:
+                self._exec_stmt(s)
+                if not self.runtime.running:
+                    return
 
     def _exec_interact(self, actions, fallbacks):
         _log("I", "interact", [a.name for a in actions])
         available = [a for a in actions if not a.condition or self.interp._eval_expr(a.condition)]
-        action_data = [{"name": a.name, "desc": a.desc, "label": a.label} for a in available]
-        self._ui_call("handleInteract", "", action_data, fallbacks)
+        fb_texts = []
+        for fb in fallbacks:
+            if hasattr(fb, 'value'):
+                fb_texts.append(fb.value)
+            else:
+                fb_texts.append(str(fb))
+        self._ui_call("handleInteract", "你想做什么？", fb_texts)
 
         while self.runtime.running:
             self.user_input_event.wait()
@@ -334,12 +411,26 @@ class GameRunner:
                 return
             else:
                 import random
-                fb = random.choice(fallbacks) if fallbacks else "..."
+                fb = random.choice(fb_texts) if fb_texts else "..."
                 _log("I", "interact", f"fallback: {fb}")
                 self._show_dialogue(None, fb)
-                self._ui_call("handleInteract", "", action_data, fallbacks)
 
     def _match_action(self, user_text: str, actions: list):
+        if self.interp.ai_engine and self.interp.ai_engine.provider != "keyword":
+            matched_name = self.interp.ai_engine.match_action(
+                user_input=user_text,
+                actions=actions,
+                runtime=self.runtime,
+            )
+            if matched_name:
+                _log("I", "ai_match", f"matched: {matched_name}")
+                for a in actions:
+                    if a.name == matched_name:
+                        return a
+            else:
+                _log("I", "ai_match", f"no match")
+                return None
+
         from fuzzywuzzy import fuzz
         best_score = 0
         best_action = None
@@ -364,6 +455,55 @@ class GameRunner:
     def continue_game(self):
         _log("D", "continue", "event set")
         self.continue_event.set()
+
+    def _get_save_path(self, slot: str) -> Path:
+        return self._save_dir / f"{slot}.json"
+
+    def _do_save(self, slot: str = None):
+        slot = slot or self.runtime._save_slot
+        save_data = self.runtime.save_game(slot)
+        save_path = self._get_save_path(slot)
+
+        try:
+            with open(save_path, "w", encoding="utf-8") as f:
+                json.dump(save_data, f, ensure_ascii=False, indent=2)
+            _log("I", "save", f"saved to {save_path}")
+            self._ui_call("showSaveMessage", f"游戏已保存 [{slot}]")
+            self._wait_for_continue()
+        except Exception as e:
+            _log("E", "save", str(e))
+            self._ui_call("showSaveMessage", f"保存失败: {e}")
+            self._wait_for_continue()
+
+    def _do_load(self, slot: str = None):
+        slot = slot or self.runtime._load_slot
+        save_path = self._get_save_path(slot)
+
+        if not save_path.exists():
+            _log("W", "load", f"no save file: {save_path}")
+            self._ui_call("showSaveMessage", f"存档不存在 [{slot}]")
+            self._wait_for_continue()
+            return
+
+        try:
+            with open(save_path, "r", encoding="utf-8") as f:
+                save_data = json.load(f)
+            success = self.runtime.load_game(save_data)
+            if success:
+                _log("I", "load", f"loaded from {save_path}")
+                self._return_stack.clear()
+                self.runtime.clear_pending()
+                self.runtime.running = True
+                self._ui_call("showSaveMessage", f"已加载存档 [{slot}]")
+                self._wait_for_continue()
+                self.runtime.set_jump(self.runtime.current_label)
+            else:
+                self._ui_call("showSaveMessage", "加载存档失败")
+                self._wait_for_continue()
+        except Exception as e:
+            _log("E", "load", str(e))
+            self._ui_call("showSaveMessage", f"加载失败: {e}")
+            self._wait_for_continue()
 
 
 game_runner = GameRunner()
@@ -424,7 +564,14 @@ class LauncherApi:
             except Exception as e:
                 _log("E", "game", str(e))
                 app_logger.error(f"游戏运行错误: {e}")
-                game_runner._show_dialogue(None, f"错误: {e}")
+                error_msg = str(e)
+                if hasattr(e, 'line') and e.line:
+                    src_line = ""
+                    if game_runner.interp:
+                        src_line = game_runner.interp.get_source_line(e.filename, e.line)
+                    if src_line:
+                        error_msg = f"[{e.filename}:{e.line}:{e.col}] {src_line.strip()}\n{error_msg}"
+                game_runner._show_dialogue(None, f"错误: {error_msg}")
 
         threading.Thread(target=run_game, daemon=True).start()
         return True
@@ -523,3 +670,98 @@ class LauncherApi:
     @api_method
     def on_action_matched(self, result):
         return True
+
+    @api_method
+    def get_save_slots(self):
+        if not game_runner._save_dir or not game_runner._save_dir.exists():
+            return []
+        slots = []
+        for f in sorted(game_runner._save_dir.glob("*.json")):
+            try:
+                with open(f, "r", encoding="utf-8") as sf:
+                    data = json.load(sf)
+                slots.append({
+                    "name": f.stem,
+                    "timestamp": data.get("timestamp", 0),
+                    "playtime": data.get("playtime", 0),
+                    "label": data.get("current_label", ""),
+                })
+            except Exception:
+                slots.append({"name": f.stem, "timestamp": 0, "playtime": 0, "label": ""})
+        return slots
+
+    @api_method
+    def save_game(self, slot: str):
+        if not slot or ".." in slot:
+            raise ApiError(400, "无效的存档名")
+        if game_runner._save_dir:
+            game_runner._do_save(slot)
+            return True
+        raise ApiError(500, "存档目录未初始化")
+
+    @api_method
+    def load_game(self, slot: str):
+        if not slot or ".." in slot:
+            raise ApiError(400, "无效的存档名")
+        if game_runner._running:
+            game_runner._do_load(slot)
+            return True
+        raise ApiError(409, "游戏未运行")
+
+    @api_method
+    def delete_save(self, slot: str):
+        if not slot or ".." in slot:
+            raise ApiError(400, "无效的存档名")
+        save_path = game_runner._get_save_path(slot) if game_runner._save_dir else None
+        if save_path and save_path.exists():
+            save_path.unlink()
+            return True
+        raise ApiError(404, "存档不存在")
+
+    @api_method
+    def reload_script(self):
+        if not game_runner._running:
+            raise ApiError(409, "游戏未运行")
+        if not game_runner._script_dir:
+            raise ApiError(500, "无法获取脚本目录")
+        game_runner.stop()
+        import time
+        time.sleep(0.1)
+        proj = project_store.get_project(launcher_api.current_project.get("id", "") if launcher_api.current_project else "")
+        if not proj:
+            raise ApiError(404, "项目信息丢失")
+        script_path = proj.get("script_main", "")
+        if not script_path or not Path(script_path).exists():
+            raise ApiError(404, "主脚本不存在")
+        ai_provider = config_store.get("default_ai_provider", "keyword")
+        game_runner.reset()
+        game_runner._running = True
+        game_runner.load_script(script_path)
+        game_runner.runtime.running = True
+        game_runner.interp = Interpreter(runtime=game_runner.runtime, ai_config={"provider": ai_provider}, script_dir=game_runner._script_dir)
+        game_runner.interp._collect_labels(game_runner.program)
+        game_runner._python_scope["qf"] = game_runner.interp.qf_ctx
+
+        def run_game():
+            try:
+                game_runner._run_program()
+            except Exception as e:
+                _log("E", "game", str(e))
+                app_logger.error(f"游戏运行错误: {e}")
+                error_msg = str(e)
+                if hasattr(e, 'line') and e.line:
+                    src_line = ""
+                    if game_runner.interp:
+                        src_line = game_runner.interp.get_source_line(e.filename, e.line)
+                    if src_line:
+                        error_msg = f"[{e.filename}:{e.line}:{e.col}] {src_line.strip()}\n{error_msg}"
+                game_runner._show_dialogue(None, f"错误: {error_msg}")
+            finally:
+                game_runner._running = False
+
+        game_runner._show_dialogue(None, "脚本已重新加载")
+        threading.Thread(target=run_game, daemon=True).start()
+        return True
+
+
+launcher_api = LauncherApi()

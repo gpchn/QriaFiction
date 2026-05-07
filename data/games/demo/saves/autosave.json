@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "timestamp": 1778172169.5686688,
+  "playtime": 14.430545568466187,
+  "variables": {
+    "player_name": "123",
+    "relationship": 40,
+    "has_key": true,
+    "gold": 60.0,
+    "day": 1,
+    "i": 3,
+    "dice_roll": 3,
+    "bonus_points": 30
+  },
+  "background": null,
+  "current_label": "demo_system",
+  "call_stack": [
+    "demo_call_return"
+  ],
+  "characters": {
+    "yuki": {
+      "name": "雪",
+      "avatar": "",
+      "color": "#87ceeb"
+    },
+    "haru": {
+      "name": "春",
+      "avatar": "",
+      "color": "#ffb6c1"
+    },
+    "narrator": {
+      "name": "",
+      "avatar": "",
+      "color": "#888888"
+    }
+  }
+}

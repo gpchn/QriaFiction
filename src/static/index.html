@@ -266,8 +266,14 @@
 </div>
 
 <!-- ==================== GAME ==================== -->
-<div v-if="view === 'game'" class="h-screen flex flex-col" style="background:var(--s0);color:var(--fg)">
+<div v-if="view === 'game'" class="h-screen flex flex-col" style="background:var(--s0);color:var(--fg);position:relative;">
 
+    <!-- Background Layer -->
+    <div id="bgLayer" style="position:absolute;inset:0;background-size:cover;background-position:center;background-repeat:no-repeat;pointer-events:none;z-index:0;"></div>
+    <div style="position:absolute;inset:0;background:var(--s0);opacity:0.7;pointer-events:none;z-index:0;" id="bgOverlay"></div>
+
+    <!-- Game Content -->
+    <div style="position:relative;z-index:1;display:flex;flex-direction:column;height:100%;padding-bottom:4.5rem;">
     <!-- Game Header -->
     <header class="h-12 flex items-center px-5 flex-shrink-0 border-b" style="border-color:var(--line);background:var(--s1)">
         <button @click="backToLauncher"
@@ -278,6 +284,18 @@
             ← 返回
         </button>
         <div class="ml-auto flex items-center gap-3">
+            <button @click="reloadScript" class="h-8 px-3 text-[13px] font-medium rounded transition-all duration-150"
+                style="border:1px solid var(--line);color:var(--fg-m)"
+                @mouseenter="$event.target.style.background='var(--s3)';$event.target.style.color='var(--fg)'"
+                @mouseleave="$event.target.style.background='transparent';$event.target.style.color='var(--fg-m)'">
+                🔄 重载脚本
+            </button>
+            <button @click="openSaveManager" class="h-8 px-3 text-[13px] font-medium rounded transition-all duration-150"
+                style="border:1px solid var(--line);color:var(--fg-m)"
+                @mouseenter="$event.target.style.background='var(--s3)';$event.target.style.color='var(--fg)'"
+                @mouseleave="$event.target.style.background='transparent';$event.target.style.color='var(--fg-m)'">
+                💾 存档
+            </button>
             <span class="text-[13px] font-medium truncate max-w-[200px]" style="color:var(--fg-m)">{{ gameProjectName }}</span>
             <span class="text-[12px] font-medium" style="color:var(--fg-f)">{{ gameStatus }}</span>
         </div>
@@ -339,24 +357,74 @@
                 <span class="w-1.5 h-1.5 rounded-full dot-3" style="background:var(--fg-f)"></span>
             </div>
         </div>
-    </div>
 
     <!-- Input -->
-    <div class="px-6 py-4 flex gap-3 flex-shrink-0 border-t" style="border-color:var(--line);background:var(--s1)"
-        :style="{opacity: gameInputEnabled ? 1 : 0.2, pointerEvents: gameInputEnabled ? 'auto' : 'none'}">
-        <input type="text" v-model="gameInput" @keydown.enter="sendInput"
-            :placeholder="gamePlaceholder" autocomplete="off" spellcheck="false"
-            class="flex-1 h-11 px-4 text-[15px] font-medium rounded"
-            style="background:var(--s2);border:1px solid var(--line);color:var(--fg)">
-        <button @click="sendInput"
-            class="h-11 w-11 rounded flex items-center justify-center flex-shrink-0 transition-all duration-150"
-            style="background:var(--accent);color:var(--s0)"
-            @mouseenter="$event.target.style.opacity='0.85'"
-            @mouseleave="$event.target.style.opacity='1'">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
-        </button>
+    <div class="px-6 py-4 border-t" style="position:fixed;bottom:0;left:0;right:0;z-index:10;background:var(--s1);border-color:var(--line);">
+        <div class="max-w-2xl mx-auto flex gap-3">
+            <input type="text" v-model="gameInput" @keydown.enter="sendInput"
+                :disabled="!gameInputEnabled"
+                :placeholder="gamePlaceholder" autocomplete="off" spellcheck="false"
+                class="flex-1 h-11 px-4 text-[15px] font-medium rounded"
+                :style="{opacity: gameInputEnabled ? 1 : 0.4, pointerEvents: gameInputEnabled ? 'auto' : 'none', background:'var(--s2)',border:'1px solid var(--line)',color:'var(--fg)'}">
+            <button @click="sendInput"
+                :disabled="!gameInputEnabled"
+                class="h-11 w-11 rounded flex items-center justify-center flex-shrink-0 transition-all duration-150"
+                :style="{opacity: gameInputEnabled ? 1 : 0.4, pointerEvents: gameInputEnabled ? 'auto' : 'none', background:'var(--accent)',color:'var(--s0)'}"
+                @mouseenter="$event.target.style.opacity='0.85'"
+                @mouseleave="$event.target.style.opacity='1'">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+            </button>
+        </div>
     </div>
 </div>
+</div>
+
+<!-- ==================== SAVE MANAGER ==================== -->
+<transition>
+    <div v-if="saveManagerOpen" class="fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.6);backdrop-filter:blur(6px)" @click.self="saveManagerOpen=false">
+        <div class="w-96 max-h-[80vh] rounded-lg overflow-hidden flex flex-col" style="background:var(--s1);border:1px solid var(--line)">
+            <div class="px-5 pt-5 pb-3 flex items-center justify-between">
+                <div class="text-[14px] font-semibold" style="color:var(--fg)">存档管理</div>
+                <button @click="saveManagerOpen=false" class="w-7 h-7 rounded flex items-center justify-center" style="color:var(--fg-f)"
+                    @mouseenter="$event.target.style.color='var(--fg)'"
+                    @mouseleave="$event.target.style.color='var(--fg-f)'">✕</button>
+            </div>
+            <div class="px-5 pb-2 space-y-1 overflow-y-auto flex-1">
+                <div v-if="saveSlots.length===0" class="text-center py-8" style="color:var(--fg-f)">暂无存档</div>
+                <div v-for="s in saveSlots" :key="s.name"
+                    class="flex items-center justify-between px-3 py-2.5 rounded"
+                    style="background:var(--s2);border:1px solid var(--line)">
+                    <div class="min-w-0 flex-1">
+                        <div class="text-[14px] font-medium truncate" style="color:var(--fg)">{{ s.name }}</div>
+                        <div class="text-[12px] font-medium mt-0.5" style="color:var(--fg-f)">{{ formatTime(s.timestamp) }} · {{ formatPlaytime(s.playtime) }}</div>
+                    </div>
+                    <div class="flex gap-1 ml-2">
+                        <button @click="doSave(s.name)" class="h-7 px-3 text-[12px] font-medium rounded transition-colors"
+                            style="border:1px solid var(--line);color:var(--fg-m)"
+                            @mouseenter="$event.target.style.background='var(--s3)'"
+                            @mouseleave="$event.target.style.background='transparent'">保存</button>
+                        <button @click="doLoad(s.name)" class="h-7 px-3 text-[12px] font-medium rounded transition-colors"
+                            style="border:1px solid var(--line);color:var(--fg-m)"
+                            @mouseenter="$event.target.style.background='var(--s3)'"
+                            @mouseleave="$event.target.style.background='transparent'">加载</button>
+                        <button @click="deleteSave(s.name)" class="h-7 w-7 rounded flex items-center justify-center text-[12px] font-medium transition-colors"
+                            style="color:var(--fg-f)"
+                            @mouseenter="$event.target.style.color='#f87171'"
+                            @mouseleave="$event.target.style.color='var(--fg-f)'">✕</button>
+                    </div>
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <input type="text" v-model="newSaveName" placeholder="新存档名称"
+                        class="flex-1 h-8 px-3 text-[13px] font-medium rounded"
+                        style="background:var(--s2);border:1px solid var(--line);color:var(--fg)">
+                    <button @click="doSave(newSaveName || 'autosave')"
+                        class="h-8 px-3 text-[13px] font-medium rounded"
+                        style="background:var(--accent);color:var(--s0)">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</transition>
 
 <!-- ==================== MODAL ==================== -->
 <transition>
