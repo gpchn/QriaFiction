@@ -1,11 +1,375 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<head>
+    <meta charset="UTF-8">
     <title>QriaFiction</title>
-  </head>
-  <body>
-    <h1>Hello, World!</h1>
-  </body>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        surface: {
+                            0: 'var(--s0)',
+                            1: 'var(--s1)',
+                            2: 'var(--s2)',
+                            3: 'var(--s3)',
+                        },
+                        fg: {
+                            DEFAULT: 'var(--fg)',
+                            muted: 'var(--fg-m)',
+                            faint: 'var(--fg-f)',
+                        },
+                        line: {
+                            DEFAULT: 'var(--line)',
+                            hover: 'var(--line-h)',
+                        },
+                        accent: 'var(--accent)',
+                    },
+                },
+            },
+        };
+    </script>
+    <style>
+        :root {
+            --s0: #000000;
+            --s1: #080808;
+            --s2: #111111;
+            --s3: #1a1a1a;
+            --fg: #e8e8e8;
+            --fg-m: #777777;
+            --fg-f: #3a3a3a;
+            --line: #1e1e1e;
+            --line-h: #333333;
+            --accent: #ffffff;
+        }
+        .light {
+            --s0: #ffffff;
+            --s1: #fafafa;
+            --s2: #f4f4f4;
+            --s3: #eeeeee;
+            --fg: #111111;
+            --fg-m: #666666;
+            --fg-f: #bbbbbb;
+            --line: #e0e0e0;
+            --line-h: #cccccc;
+            --accent: #000000;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; overflow: hidden; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 2px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--line-h); }
+        input, select, textarea { font-family: inherit; }
+        input:focus, select:focus { outline: none; border-color: var(--fg-m) !important; }
+
+        .v-enter-active, .v-leave-active { transition: opacity 0.15s ease; }
+        .v-enter-from, .v-leave-to { opacity: 0; }
+
+        @keyframes msgIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .msg-in { animation: msgIn 0.2s ease-out; }
+
+        @keyframes dotPulse {
+            0%, 80%, 100% { opacity: 0.2; }
+            40% { opacity: 1; }
+        }
+        .dot-1 { animation: dotPulse 1.4s infinite; }
+        .dot-2 { animation: dotPulse 1.4s infinite 0.2s; }
+        .dot-3 { animation: dotPulse 1.4s infinite 0.4s; }
+    </style>
+</head>
+<body class="light" id="app">
+
+<!-- ==================== LAUNCHER ==================== -->
+<div v-if="view === 'launcher'" class="h-screen flex" style="background:var(--s0);color:var(--fg)">
+
+    <!-- Sidebar -->
+    <aside class="w-48 h-full flex flex-col border-r flex-shrink-0" style="border-color:var(--line);background:var(--s1)">
+        <div class="px-5 pt-6 pb-8">
+            <div class="text-[11px] font-bold tracking-[0.25em] uppercase" style="color:var(--fg)">QriaFiction</div>
+        </div>
+        <nav class="flex-1 px-3 space-y-0.5">
+            <button v-for="t in tabs" :key="t.id" @click="page=t.id"
+                class="w-full text-left px-3 py-2 text-[12px] rounded transition-all duration-150"
+                :style="{
+                    background: page===t.id ? 'var(--s3)' : 'transparent',
+                    color: page===t.id ? 'var(--fg)' : 'var(--fg-m)',
+                    fontWeight: page===t.id ? 600 : 400
+                }">
+                {{ t.label }}
+            </button>
+        </nav>
+        <div class="px-3 pb-4">
+            <button @click="toggleTheme"
+                class="w-full px-3 py-2 text-[11px] rounded transition-colors"
+                :style="{color:'var(--fg-m)'}"
+                @mouseenter="$event.target.style.background='var(--s3)'"
+                @mouseleave="$event.target.style.background='transparent'">
+                {{ isDark ? '☀ 浅色模式' : '☾ 深色模式' }}
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="flex-1 flex flex-col min-w-0">
+        <!-- Header -->
+        <header class="h-14 flex items-center justify-between px-8 border-b flex-shrink-0" style="border-color:var(--line)">
+            <h2 class="text-[13px] font-semibold" style="color:var(--fg)">{{ currentPageTitle }}</h2>
+            <div class="flex items-center gap-2">
+                <button v-if="page==='projects'" @click="openImport"
+                    class="h-7 px-3 text-[11px] font-medium rounded transition-all duration-150"
+                    :style="{background:'var(--accent)',color:'var(--s0)'}">
+                    导入项目
+                </button>
+                <button v-if="page==='models'" @click="openAddModel"
+                    class="h-7 px-3 text-[11px] font-medium rounded transition-all duration-150"
+                    :style="{background:'var(--accent)',color:'var(--s0)'}">
+                    添加模型
+                </button>
+            </div>
+        </header>
+
+        <!-- Content -->
+        <div class="flex-1 overflow-y-auto px-8 py-6">
+
+            <!-- Projects -->
+            <div v-if="page==='projects'">
+                <div v-if="projects.length===0" class="flex flex-col items-center justify-center pt-32">
+                    <div class="w-10 h-10 rounded-lg flex items-center justify-center mb-4 text-lg" style="background:var(--s2);color:var(--fg-f)">◇</div>
+                    <p class="text-[12px] mb-5" style="color:var(--fg-m)">暂无项目</p>
+                    <button @click="openImport" class="h-8 px-4 text-[11px] font-medium rounded transition-colors" style="border:1px solid var(--line);color:var(--fg-m)">导入项目</button>
+                </div>
+                <div v-else class="grid grid-cols-3 gap-4">
+                    <div v-for="p in projects" :key="p.id"
+                        class="group rounded-lg p-5 transition-all duration-200 cursor-default"
+                        style="background:var(--s1);border:1px solid var(--line)"
+                        @mouseenter="$event.currentTarget.style.borderColor='var(--line-h)'"
+                        @mouseleave="$event.currentTarget.style.borderColor='var(--line)'">
+                        <div class="flex items-center gap-2 mb-3">
+                            <div class="w-2 h-2 rounded-full" :style="{background: p.has_script ? '#4ade80' : '#fbbf24'}"></div>
+                            <span class="text-[13px] font-semibold truncate" style="color:var(--fg)">{{ p.title || p.name }}</span>
+                        </div>
+                        <div class="flex items-center gap-2 mb-4 min-h-[18px]">
+                            <span v-if="p.author" class="text-[11px]" style="color:var(--fg-m)">{{ p.author }}</span>
+                            <span v-if="p.version" class="text-[10px] px-1.5 py-0.5 rounded" style="background:var(--s3);color:var(--fg-f)">v{{ p.version }}</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button @click="launch(p.id)" :disabled="!p.has_script"
+                                class="flex-1 h-7 text-[11px] font-medium rounded transition-colors disabled:opacity-20"
+                                style="border:1px solid var(--line);color:var(--fg)"
+                                @mouseenter="!$event.target.disabled && ($event.target.style.background='var(--s3)')"
+                                @mouseleave="$event.target.style.background='transparent'">
+                                启动
+                            </button>
+                            <button @click="askDelete(p)"
+                                class="h-7 px-2.5 text-[11px] rounded transition-colors"
+                                style="border:1px solid var(--line);color:var(--fg-f)"
+                                @mouseenter="$event.target.style.color='#f87171';$event.target.style.borderColor='rgba(248,113,113,0.3)'"
+                                @mouseleave="$event.target.style.color='var(--fg-f)';$event.target.style.borderColor='var(--line)'">
+                                删除
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Models -->
+            <div v-if="page==='models'" class="max-w-xl">
+                <div v-if="models.length===0" class="flex flex-col items-center justify-center pt-32">
+                    <div class="w-10 h-10 rounded-lg flex items-center justify-center mb-4 text-lg" style="background:var(--s2);color:var(--fg-f)">⚙</div>
+                    <p class="text-[12px] mb-5" style="color:var(--fg-m)">未配置模型</p>
+                    <button @click="openAddModel" class="h-8 px-4 text-[11px] font-medium rounded transition-colors" style="border:1px solid var(--line);color:var(--fg-m)">添加模型</button>
+                </div>
+                <div v-else class="space-y-2">
+                    <div v-for="m in models" :key="m.id"
+                        class="flex items-center justify-between px-4 py-3 rounded-lg group transition-colors"
+                        style="background:var(--s1);border:1px solid var(--line)">
+                        <div class="min-w-0 flex-1">
+                            <div class="text-[12px] font-medium truncate" style="color:var(--fg)">{{ m.name }}</div>
+                            <div class="text-[11px] mt-0.5" style="color:var(--fg-f)">{{ m.provider }} · {{ m.model || 'default' }}</div>
+                        </div>
+                        <button @click="removeModel(m.id)"
+                            class="w-6 h-6 rounded flex items-center justify-center text-[13px] opacity-0 group-hover:opacity-100 transition-opacity"
+                            style="color:var(--fg-f)"
+                            @mouseenter="$event.target.style.color='#f87171'"
+                            @mouseleave="$event.target.style.color='var(--fg-f)'">
+                            ×
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings -->
+            <div v-if="page==='settings'" class="max-w-md">
+                <div class="space-y-8">
+                    <section>
+                        <h3 class="text-[11px] font-semibold tracking-wider uppercase mb-4" style="color:var(--fg-m)">常规</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="text-[11px] mb-1.5 block" style="color:var(--fg-m)">默认 AI 提供商</label>
+                                <select v-model="cfg.default_ai_provider"
+                                    class="w-full h-9 px-3 text-[12px] rounded"
+                                    style="background:var(--s2);border:1px solid var(--line);color:var(--fg)">
+                                    <option value="keyword">关键词匹配（本地）</option>
+                                    <option value="openai">OpenAI</option>
+                                    <option value="deepseek">DeepSeek</option>
+                                </select>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="text-[11px] mb-1.5 block" style="color:var(--fg-m)">窗口宽度</label>
+                                    <input type="number" v-model.number="cfg.window_width"
+                                        class="w-full h-9 px-3 text-[12px] rounded"
+                                        style="background:var(--s2);border:1px solid var(--line);color:var(--fg)">
+                                </div>
+                                <div>
+                                    <label class="text-[11px] mb-1.5 block" style="color:var(--fg-m)">窗口高度</label>
+                                    <input type="number" v-model.number="cfg.window_height"
+                                        class="w-full h-9 px-3 text-[12px] rounded"
+                                        style="background:var(--s2);border:1px solid var(--line);color:var(--fg)">
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                    <section>
+                        <h3 class="text-[11px] font-semibold tracking-wider uppercase mb-4" style="color:var(--fg-m)">主题</h3>
+                        <div class="flex gap-3">
+                            <button @click="applyTheme(true)"
+                                class="flex-1 h-10 rounded text-[12px] font-medium transition-all"
+                                :style="{
+                                    background: '#000', color: isDark ? '#fff' : '#555',
+                                    border: isDark ? '2px solid #fff' : '1px solid var(--line)',
+                                    boxShadow: isDark ? '0 0 0 1px #fff' : 'none'
+                                }">深色</button>
+                            <button @click="applyTheme(false)"
+                                class="flex-1 h-10 rounded text-[12px] font-medium transition-all"
+                                :style="{
+                                    background: '#fff', color: !isDark ? '#000' : '#999',
+                                    border: !isDark ? '2px solid #000' : '1px solid var(--line)',
+                                    boxShadow: !isDark ? '0 0 0 1px #000' : 'none'
+                                }">浅色</button>
+                        </div>
+                    </section>
+                    <button @click="saveCfg"
+                        class="w-full h-9 text-[12px] font-semibold rounded transition-opacity hover:opacity-80"
+                        style="background:var(--accent);color:var(--s0)">
+                        保存设置
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="h-7 flex items-center justify-between px-8 text-[10px] border-t flex-shrink-0" style="border-color:var(--line);color:var(--fg-f)">
+            <span>就绪</span>
+            <span>v0.1.0</span>
+        </footer>
+    </main>
+</div>
+
+<!-- ==================== GAME ==================== -->
+<div v-if="view === 'game'" class="h-screen flex flex-col" style="background:#000;color:#ddd">
+
+    <!-- Game Header -->
+    <div class="h-10 flex items-center px-5 flex-shrink-0" style="border-bottom:1px solid #151515">
+        <button @click="backToLauncher"
+            class="text-[10px] tracking-wider uppercase transition-colors hover:text-white"
+            style="color:#444">← 返回</button>
+        <span class="mx-3 text-[10px]" style="color:#222">|</span>
+        <span class="text-[10px] font-semibold tracking-wider uppercase" style="color:#333">QriaFiction</span>
+        <span class="ml-auto text-[10px] font-mono" style="color:#282828">{{ gameStatus }}</span>
+    </div>
+
+    <!-- Messages -->
+    <div ref="msgContainer" class="flex-1 overflow-y-auto px-6 py-5 relative" style="background:#030303">
+        <div class="max-w-2xl mx-auto space-y-3">
+            <div v-for="(m, i) in messages" :key="i" class="msg-in">
+                <!-- System -->
+                <div v-if="m.type==='system'" class="py-2 text-center">
+                    <span class="text-[11px] px-3 py-1 rounded-full" style="color:#444;border:1px solid #151515">{{ m.text }}</span>
+                </div>
+                <!-- Character / User -->
+                <div v-else class="flex gap-2.5"
+                    :style="{flexDirection: m.type==='user' ? 'row-reverse' : 'row'}">
+                    <div class="w-8 h-8 rounded flex-shrink-0 flex items-center justify-center text-[11px] overflow-hidden"
+                        style="background:#0a0a0a;border:1px solid #161616;color:#555">
+                        <img v-if="m.avatar" :src="m.avatar" class="w-full h-full object-cover">
+                        <span v-else class="font-medium">{{ m.type==='user' ? '你' : (m.name ? m.name[0] : '?') }}</span>
+                    </div>
+                    <div class="min-w-0 max-w-[75%]">
+                        <div v-if="m.name" class="text-[10px] font-medium mb-1" :style="{color: m.color || '#555'}">{{ m.name }}</div>
+                        <div class="px-3.5 py-2 text-[13px] leading-relaxed break-words"
+                            :style="{
+                                background: m.type==='user' ? '#0c0c0c' : '#080808',
+                                border: '1px solid ' + (m.type==='user' ? '#181818' : '#131313'),
+                                borderRadius: m.type==='user' ? '10px 2px 10px 10px' : '2px 10px 10px 10px'
+                            }">{{ m.text }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loading dots -->
+            <div v-if="gameLoading" class="flex gap-1.5 px-3 pt-1">
+                <span class="w-1.5 h-1.5 rounded-full dot-1" style="background:#333"></span>
+                <span class="w-1.5 h-1.5 rounded-full dot-2" style="background:#333"></span>
+                <span class="w-1.5 h-1.5 rounded-full dot-3" style="background:#333"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Input -->
+    <div class="px-5 py-3 flex gap-2 flex-shrink-0" style="border-top:1px solid #131313"
+        :style="{opacity: gameInputEnabled ? 1 : 0.3, pointerEvents: gameInputEnabled ? 'auto' : 'none'}">
+        <input type="text" v-model="gameInput" @keydown.enter="sendInput"
+            :placeholder="gamePlaceholder" autocomplete="off" spellcheck="false"
+            class="flex-1 h-9 px-4 text-[13px] rounded"
+            style="background:#080808;border:1px solid #161616;color:#ddd">
+        <button @click="sendInput"
+            class="w-9 h-9 rounded flex items-center justify-center flex-shrink-0 transition-colors hover:bg-[#151515]"
+            style="background:#0c0c0c;border:1px solid #161616;color:#444">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+        </button>
+    </div>
+</div>
+
+<!-- ==================== MODAL ==================== -->
+<transition>
+    <div v-if="modal.show" class="fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.6);backdrop-filter:blur(6px)" @click.self="modal.show=false">
+        <div class="w-80 rounded-lg overflow-hidden" style="background:var(--s1);border:1px solid var(--line)">
+            <div class="px-5 pt-5 pb-3">
+                <div class="text-[12px] font-semibold" style="color:var(--fg)">{{ modal.title }}</div>
+            </div>
+            <div class="px-5 pb-4" v-html="modal.body"></div>
+            <div class="flex gap-2 px-5 pb-5">
+                <button @click="modal.show=false"
+                    class="flex-1 h-8 text-[11px] font-medium rounded transition-colors"
+                    style="border:1px solid var(--line);color:var(--fg-m)">取消</button>
+                <button @click="modal.onOk();modal.show=false"
+                    class="flex-1 h-8 text-[11px] font-semibold rounded transition-opacity hover:opacity-80"
+                    style="background:var(--accent);color:var(--s0)">确认</button>
+            </div>
+        </div>
+    </div>
+</transition>
+
+<!-- ==================== TOAST ==================== -->
+<div class="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
+    <transition-group>
+        <div v-for="t in toasts" :key="t.id"
+            class="px-3 py-2 rounded text-[11px] font-medium"
+            :style="{
+                background: t.type==='error' ? 'var(--s2)' : 'var(--s3)',
+                color: t.type==='error' ? '#f87171' : 'var(--fg)',
+                border: '1px solid ' + (t.type==='error' ? 'rgba(248,113,113,0.15)' : 'var(--line)')
+            }">{{ t.msg }}</div>
+    </transition-group>
+</div>
+
+<script src="app.js"></script>
+</body>
 </html>

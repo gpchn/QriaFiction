@@ -3,20 +3,25 @@
 
 import webview
 from pathlib import Path
-from jsapi import Api
+from app.api import LauncherApi
+from app.config import config_store
 
 
 def main():
-    INDEX_HTML = Path(__file__).parent / "static" / "index.html"
+    static_dir = Path(__file__).parent / "static"
+    index_html = static_dir / "index.html"
+    width = config_store.get("window_width", 1000)
+    height = config_store.get("window_height", 700)
+
     webview.create_window(
         "QriaFiction",
-        str(INDEX_HTML),
-        width=800,
-        height=600,
-        js_api=Api()
+        str(index_html),
+        width=width,
+        height=height,
+        background_color="#0a0a0a",
+        js_api=LauncherApi(),
     )
-    webview.start()
-
+    webview.start(debug=True)
 
 
 if __name__ == "__main__":

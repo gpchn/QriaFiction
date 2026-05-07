@@ -1,10 +1,26 @@
-# Python-generated files
+# Python
 __pycache__/
-*.py[oc]
-build/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
 dist/
-wheels/
-*.egg-info
+build/
 
-# Virtual environments
-.venv
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config
+*.log
+*.toml
+
+# Data (keep structure)
+data
