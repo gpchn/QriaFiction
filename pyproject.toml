@@ -1,13 +1,11 @@
 [project]
-name = "QriaDrama"
-version = "2.0.0"
+name = "QriaFiction"
+version = "0.1.0"
 description = ""
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "colorlog>=6.9.0",
-    "cryptography>=45.0.6",
-    "pywebview>=6.0",
+    "pywebview>=6.2.1",
 ]
 
 [[tool.uv.index]]

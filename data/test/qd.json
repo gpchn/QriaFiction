@@ -1,9 +1,0 @@
-{
-  "title": "test",
-  "cover": "1.jpg",
-  "roles": {
-    "": "color: white;",
-    "1": "color: green;"
-  },
-  "index": "1.json"
-}
