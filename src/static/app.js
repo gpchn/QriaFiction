@@ -288,21 +288,35 @@ window.addEventListener('pywebviewready', () => {
             }
 
             window.addMessage = addMsg;
+
+            // 双层交叉淡入淡出
+            let _bgActive = 0;
+            function _bgLayer(n) { return document.getElementById('bgLayer' + n); }
+
             window.setBackground = (path) => {
-                const bgLayer = document.getElementById('bgLayer');
+                const next = _bgActive === 1 ? 2 : 1;
+                const curr = _bgLayer(_bgActive);
+                const nextEl = _bgLayer(next);
                 if (path) {
-                    if (bgLayer) {
-                        bgLayer.style.backgroundImage = 'url("' + path + '")';
-                        bgLayer.style.backgroundPosition = 'center center';
-                        bgLayer.style.backgroundSize = 'cover';
-                        bgLayer.style.backgroundRepeat = 'no-repeat';
-                        bgLayer.style.opacity = '1';
+                    if (nextEl) {
+                        nextEl.style.backgroundImage = 'url("' + path + '")';
+                        nextEl.style.backgroundPosition = 'center center';
+                        nextEl.style.backgroundSize = 'cover';
+                        nextEl.style.backgroundRepeat = 'no-repeat';
                     }
+                    // 交叉淡入淡出
+                    if (curr && _bgActive > 0 && curr.style.backgroundImage) {
+                        nextEl.style.opacity = '0';
+                        void nextEl.offsetWidth; // 触发 reflow
+                        nextEl.style.opacity = '1';
+                        curr.style.opacity = '0';
+                    } else {
+                        nextEl.style.opacity = '1';
+                    }
+                    _bgActive = next;
                 } else {
-                    if (bgLayer) {
-                        bgLayer.style.backgroundImage = '';
-                        bgLayer.style.opacity = '0';
-                    }
+                    if (curr) curr.style.opacity = '0';
+                    _bgActive = 0;
                 }
             };
             window.loadBackground = (absPath) => {
