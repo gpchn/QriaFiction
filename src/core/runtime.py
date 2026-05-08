@@ -18,12 +18,7 @@ class Character:
 
 
 class Runtime:
-    SAVE_DIR = None
-
-    @classmethod
-    def init_save_dir(cls, save_dir: Path):
-        cls.SAVE_DIR = save_dir
-        cls.SAVE_DIR.mkdir(parents=True, exist_ok=True)
+    SAVE_VERSION = 1
 
     def __init__(self):
         self.variables: dict = {}
@@ -48,6 +43,11 @@ class Runtime:
         self.music_volume: float = 1.0
         self.sound_volume: float = 1.0
         self.current_music: str | None = None
+        self.save_dir: Path | None = None
+
+    def init_save_dir(self, save_dir: Path):
+        self.save_dir = save_dir
+        self.save_dir.mkdir(parents=True, exist_ok=True)
 
     def get(self, name: str):
         if name.startswith("_"):
@@ -106,8 +106,8 @@ class Runtime:
 
     def save_game(self, slot: str | None = None) -> dict:
         slot = slot or self._save_slot
-        save_data = {
-            "version": 1,
+        return {
+            "version": self.SAVE_VERSION,
             "timestamp": time.time(),
             "playtime": time.time() - self._start_time,
             "variables": self.variables.copy(),
@@ -115,17 +115,24 @@ class Runtime:
             "current_label": self.current_label,
             "call_stack": self.call_stack.copy(),
             "characters": {k: v.to_dict() for k, v in self.characters.items()},
+            "music_volume": self.music_volume,
+            "sound_volume": self.sound_volume,
+            "current_music": self.current_music,
         }
-        return save_data
 
     def load_game(self, save_data: dict) -> bool:
         if not save_data:
+            return False
+        if save_data.get("version", 0) > self.SAVE_VERSION:
             return False
         self.variables = save_data.get("variables", {})
         self.background = save_data.get("background")
         self.current_label = save_data.get("current_label", "")
         self.call_stack = save_data.get("call_stack", [])
         self._start_time = time.time() - save_data.get("playtime", 0)
+        self.music_volume = save_data.get("music_volume", 1.0)
+        self.sound_volume = save_data.get("sound_volume", 1.0)
+        self.current_music = save_data.get("current_music")
 
         self.characters.clear()
         for k, v in save_data.get("characters", {}).items():

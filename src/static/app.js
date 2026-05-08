@@ -281,10 +281,15 @@ window.addEventListener('pywebviewready', () => {
                 } catch (e) { toast(e.message, 'error'); }
             }
 
+            function _notifyLoaded(eventName) {
+                if (pywebview && pywebview.api && pywebview.api[eventName]) {
+                    pywebview.api[eventName]();
+                }
+            }
+
             window.addMessage = addMsg;
             window.setBackground = (path) => {
                 const bgLayer = document.getElementById('bgLayer');
-                console.log('[bg] setBackground called, path length:', path ? path.length : 0, 'bgLayer found:', !!bgLayer);
                 if (path) {
                     if (bgLayer) {
                         bgLayer.style.backgroundImage = 'url("' + path + '")';
@@ -301,31 +306,19 @@ window.addEventListener('pywebviewready', () => {
                 }
             };
             window.loadBackground = (absPath) => {
-                console.log('[bg] loadBackground called, absPath:', absPath);
                 if (!absPath) {
                     window.setBackground('');
-                    if (pywebview && pywebview.api && pywebview.api.bg_image_loaded) {
-                        pywebview.api.bg_image_loaded();
-                    }
+                    _notifyLoaded('bg_image_loaded');
                     return;
                 }
                 pywebview.api.get_bg_image(absPath).then(result => {
                     const dataUrl = result && result.data && result.data.data;
-                    console.log('[bg] get_bg_image result, dataUrl length:', dataUrl ? dataUrl.length : 0);
-                    if (dataUrl) {
-                        window.setBackground(dataUrl);
-                    } else {
-                        window.setBackground('');
-                    }
-                    if (pywebview && pywebview.api && pywebview.api.bg_image_loaded) {
-                        pywebview.api.bg_image_loaded();
-                    }
+                    window.setBackground(dataUrl || '');
+                    _notifyLoaded('bg_image_loaded');
                 }).catch(err => {
-                    console.error('loadBackground error:', err);
+                    console.error('[bg] load error:', err);
                     window.setBackground('');
-                    if (pywebview && pywebview.api && pywebview.api.bg_image_loaded) {
-                        pywebview.api.bg_image_loaded();
-                    }
+                    _notifyLoaded('bg_image_loaded');
                 });
             };
             window.setStatus = (t) => { gameStatus.value = t; };
@@ -353,48 +346,86 @@ window.addEventListener('pywebviewready', () => {
                 soundPlayers: [],
                 musicVolume: 1.0,
                 soundVolume: 1.0,
+                musicBaseVolume: 1.0,
             };
 
-            window.playMusic = (path, volume = 1.0, loop = true, fadeIn = 0.0) => {
+            window.loadMusic = (absPath, volume = 1.0, loop = true, fadeIn = 0.0) => {
                 if (AudioCtx.musicPlayer) {
                     AudioCtx.musicPlayer.pause();
                     AudioCtx.musicPlayer = null;
                 }
-                if (!path) return;
-                const audio = new Audio(path);
-                audio.loop = loop;
-                audio.volume = 0;
-                audio.play().catch(() => {});
-                AudioCtx.musicPlayer = audio;
-
-                const targetVol = volume * AudioCtx.musicVolume;
-                if (fadeIn > 0) {
-                    const steps = 30;
-                    const interval = (fadeIn * 1000) / steps;
-                    let step = 0;
-                    const timer = setInterval(() => {
-                        step++;
-                        audio.volume = (step / steps) * targetVol;
-                        if (step >= steps) {
-                            audio.volume = targetVol;
-                            clearInterval(timer);
-                        }
-                    }, interval);
-                } else {
-                    audio.volume = targetVol;
+                if (!absPath) {
+                    _notifyLoaded('audio_loaded');
+                    return;
                 }
+                AudioCtx.musicBaseVolume = volume;
+                pywebview.api.get_audio_data(absPath).then(result => {
+                    const dataUrl = result && result.data && result.data.data;
+                    if (!dataUrl) {
+                        _notifyLoaded('audio_loaded');
+                        return;
+                    }
+                    const audio = new Audio(dataUrl);
+                    audio.loop = loop;
+                    audio.volume = 0;
+                    audio.play().catch(() => {});
+                    AudioCtx.musicPlayer = audio;
+
+                    const targetVol = volume * AudioCtx.musicVolume;
+                    if (fadeIn > 0) {
+                        const steps = 30;
+                        const interval = (fadeIn * 1000) / steps;
+                        let step = 0;
+                        const timer = setInterval(() => {
+                            step++;
+                            audio.volume = (step / steps) * targetVol;
+                            if (step >= steps) {
+                                audio.volume = targetVol;
+                                clearInterval(timer);
+                            }
+                        }, interval);
+                    } else {
+                        audio.volume = targetVol;
+                    }
+                    _notifyLoaded('audio_loaded');
+                }).catch(err => {
+                    console.error('[audio] loadMusic error:', err);
+                    _notifyLoaded('audio_loaded');
+                });
+            };
+
+            window.loadSound = (absPath, volume = 1.0) => {
+                if (!absPath) {
+                    _notifyLoaded('audio_loaded');
+                    return;
+                }
+                pywebview.api.get_audio_data(absPath).then(result => {
+                    const dataUrl = result && result.data && result.data.data;
+                    if (!dataUrl) {
+                        _notifyLoaded('audio_loaded');
+                        return;
+                    }
+                    const audio = new Audio(dataUrl);
+                    audio.volume = volume * AudioCtx.soundVolume;
+                    audio.play().catch(() => {});
+                    AudioCtx.soundPlayers.push(audio);
+                    audio.onended = () => {
+                        const idx = AudioCtx.soundPlayers.indexOf(audio);
+                        if (idx !== -1) AudioCtx.soundPlayers.splice(idx, 1);
+                    };
+                    _notifyLoaded('audio_loaded');
+                }).catch(err => {
+                    console.error('[audio] loadSound error:', err);
+                    _notifyLoaded('audio_loaded');
+                });
+            };
+
+            window.playMusic = (path, volume = 1.0, loop = true, fadeIn = 0.0) => {
+                window.loadMusic(path, volume, loop, fadeIn);
             };
 
             window.playSound = (path, volume = 1.0) => {
-                if (!path) return;
-                const audio = new Audio(path);
-                audio.volume = volume * AudioCtx.soundVolume;
-                audio.play().catch(() => {});
-                AudioCtx.soundPlayers.push(audio);
-                audio.onended = () => {
-                    const idx = AudioCtx.soundPlayers.indexOf(audio);
-                    if (idx !== -1) AudioCtx.soundPlayers.splice(idx, 1);
-                };
+                window.loadSound(path, volume);
             };
 
             window.stopMusic = (fadeOut = 0.0) => {
@@ -406,9 +437,11 @@ window.addEventListener('pywebviewready', () => {
                     const currentVol = AudioCtx.musicPlayer.volume;
                     const timer = setInterval(() => {
                         step++;
-                        AudioCtx.musicPlayer.volume = currentVol * (1 - step / steps);
+                        if (AudioCtx.musicPlayer) {
+                            AudioCtx.musicPlayer.volume = currentVol * (1 - step / steps);
+                        }
                         if (step >= steps) {
-                            AudioCtx.musicPlayer.pause();
+                            if (AudioCtx.musicPlayer) AudioCtx.musicPlayer.pause();
                             AudioCtx.musicPlayer = null;
                             clearInterval(timer);
                         }
@@ -428,7 +461,7 @@ window.addEventListener('pywebviewready', () => {
                 if (musicVol >= 0) {
                     AudioCtx.musicVolume = musicVol;
                     if (AudioCtx.musicPlayer) {
-                        AudioCtx.musicPlayer.volume = musicVol * (AudioCtx.musicPlayer._targetVolume || 1.0);
+                        AudioCtx.musicPlayer.volume = musicVol * AudioCtx.musicBaseVolume;
                     }
                 }
                 if (soundVol >= 0) {

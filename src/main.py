@@ -21,7 +21,7 @@ def main():
         background_color="#0a0a0a",
         js_api=LauncherApi(),
     )
-    webview.start(debug=True)
+    webview.start(debug=False)
 
 
 if __name__ == "__main__":

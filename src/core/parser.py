@@ -1,6 +1,6 @@
 from core.tokens import TokenType, KEYWORDS
 from core.lexer import Token
-from core.errors import SyntaxError
+from core.errors import QFSyntaxError
 from core.ast import *
 
 
@@ -23,7 +23,7 @@ class Parser:
     def _expect(self, type_: TokenType) -> Token:
         tok = self._peek()
         if tok.type != type_:
-            raise SyntaxError(
+            raise QFSyntaxError(
                 f"期望 {type_.name}，但得到 {tok.type.name} ({tok.value!r})",
                 tok.line, tok.col, self.filename
             )
@@ -123,7 +123,7 @@ class Parser:
                 return self._parse_dialogue()
             return None
         else:
-            raise SyntaxError(f"意外的 token: {tok.type.name} ({tok.value!r})", tok.line, tok.col, self.filename)
+            raise QFSyntaxError(f"意外的 token: {tok.type.name} ({tok.value!r})", tok.line, tok.col, self.filename)
 
     def _parse_define(self) -> DefineCharacterStmt:
         self._expect(TokenType.DEFINE)
@@ -162,7 +162,7 @@ class Parser:
             self._advance()
             return BgStmt(path=tok.value)
         else:
-            raise SyntaxError(f"期望字符串或 none，得到 {tok.type.name}", tok.line, tok.col, self.filename)
+            raise QFSyntaxError(f"期望字符串或 none，得到 {tok.type.name}", tok.line, tok.col, self.filename)
 
     def _parse_music(self) -> PlayMusicStmt:
         self._expect(TokenType.MUSIC)
@@ -223,7 +223,7 @@ class Parser:
             self._advance()
             return StopSoundStmt()
         else:
-            raise SyntaxError(f"期望 music 或 sound，得到 {tok.type.name}", tok.line, tok.col, self.filename)
+            raise QFSyntaxError(f"期望 music 或 sound，得到 {tok.type.name}", tok.line, tok.col, self.filename)
 
     def _parse_volume(self) -> SetVolumeStmt:
         self._expect(TokenType.VOLUME)
@@ -239,7 +239,7 @@ class Parser:
             vol = self._expect(TokenType.NUMBER)
             stmt.sound_volume = vol.value
         else:
-            raise SyntaxError(f"期望 music 或 sound，得到 {self._peek().type.name}", self._peek().line, self._peek().col, self.filename)
+            raise QFSyntaxError(f"期望 music 或 sound，得到 {self._peek().type.name}", self._peek().line, self._peek().col, self.filename)
         return stmt
 
     def _parse_interact(self) -> InteractStmt:
@@ -260,11 +260,11 @@ class Parser:
                 action = self._parse_interact_action()
                 stmt.actions.append(action)
             else:
-                raise SyntaxError(f"interact 块中期望动作或 fallback", self._peek().line, self._peek().col, self.filename)
+                raise QFSyntaxError(f"interact 块中期望动作或 fallback", self._peek().line, self._peek().col, self.filename)
 
         end_tok = self._expect(TokenType.END)
         if not stmt.fallbacks:
-            raise SyntaxError("interact 块中至少需要一条 fallback", end_tok.line, end_tok.col, self.filename)
+            raise QFSyntaxError("interact 块中至少需要一条 fallback", end_tok.line, end_tok.col, self.filename)
         return stmt
 
     def _parse_param_key(self) -> str:
@@ -275,7 +275,7 @@ class Parser:
         if tok.type in (TokenType.DESC, TokenType.CONDITION):
             self._advance()
             return tok.value
-        raise SyntaxError(f"期望参数名，但得到 {tok.type.name} ({tok.value!r})", tok.line, tok.col, self.filename)
+        raise QFSyntaxError(f"期望参数名，但得到 {tok.type.name} ({tok.value!r})", tok.line, tok.col, self.filename)
 
     def _parse_interact_action(self) -> InteractAction:
         name_tok = self._expect(TokenType.STRING)
@@ -340,28 +340,26 @@ class Parser:
         else:
             return DialogueStmt(character=None, text=text_tok.value)
 
+    def _expect_label_name(self) -> Token:
+        tok = self._peek()
+        if tok.type == TokenType.IDENTIFIER:
+            return self._advance()
+        raise QFSyntaxError(f"期望标签名，但得到 {tok.type.name} ({tok.value!r})", tok.line, tok.col, self.filename)
+
     def _parse_label(self) -> LabelStmt:
         self._expect(TokenType.LABEL)
-        tok = self._peek()
-        if tok.type in (TokenType.IDENTIFIER, TokenType.END, TokenType.LABEL, TokenType.BREAK, TokenType.CONTINUE):
-            self._advance()
-        else:
-            raise SyntaxError(f"期望标签名，但得到 {tok.type.name} ({tok.value!r})", tok.line, tok.col, self.filename)
+        name_tok = self._expect_label_name()
         self._expect(TokenType.COLON)
         self._consume_block_tokens()
 
         body = self._parse_block()
         self._expect(TokenType.END)
-        return LabelStmt(name=tok.value, body=body)
+        return LabelStmt(name=name_tok.value, body=body)
 
     def _parse_jump(self) -> JumpStmt:
         self._expect(TokenType.JUMP)
-        tok = self._peek()
-        if tok.type in (TokenType.IDENTIFIER, TokenType.END, TokenType.LABEL):
-            self._advance()
-        else:
-            raise SyntaxError(f"期望标签名，但得到 {tok.type.name} ({tok.value!r})", tok.line, tok.col, self.filename)
-        target = tok.value
+        target_tok = self._expect_label_name()
+        target = target_tok.value
 
         condition = None
         is_otherwise = False
@@ -377,12 +375,8 @@ class Parser:
 
     def _parse_call(self) -> CallStmt:
         self._expect(TokenType.CALL)
-        tok = self._peek()
-        if tok.type in (TokenType.IDENTIFIER, TokenType.END, TokenType.LABEL):
-            self._advance()
-        else:
-            raise SyntaxError(f"期望标签名，但得到 {tok.type.name} ({tok.value!r})", tok.line, tok.col, self.filename)
-        target = tok.value
+        target_tok = self._expect_label_name()
+        target = target_tok.value
         condition = None
         if self._peek().type == TokenType.IF:
             self._advance()
@@ -405,7 +399,7 @@ class Parser:
             self._advance()
             op = op_tok.value
         else:
-            raise SyntaxError(f"期望赋值运算符", op_tok.line, op_tok.col, self.filename)
+            raise QFSyntaxError(f"期望赋值运算符", op_tok.line, op_tok.col, self.filename)
         value = self._parse_expression()
         return SetStmt(name=name.value, operator=op, value=value)
 
@@ -482,7 +476,7 @@ class Parser:
             self._advance()
             return WaitStmt(duration=tok.value)
         else:
-            raise SyntaxError(f"期望数字或 click", tok.line, tok.col, self.filename)
+            raise QFSyntaxError(f"期望数字或 click", tok.line, tok.col, self.filename)
 
     def _parse_python(self) -> PythonBlockStmt:
         self._expect(TokenType.PYTHON)
@@ -599,7 +593,7 @@ class Parser:
             self._expect(TokenType.RPAREN)
             return expr
 
-        raise SyntaxError(f"期望表达式，得到 {tok.type.name} ({tok.value!r})", tok.line, tok.col, self.filename)
+        raise QFSyntaxError(f"期望表达式，得到 {tok.type.name} ({tok.value!r})", tok.line, tok.col, self.filename)
 
     def parse(self) -> Program:
         return self._parse_program()

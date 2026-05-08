@@ -4,7 +4,7 @@ from pathlib import Path
 from core.ast import *
 from core.runtime import Runtime, Character
 from core.ai_engine import AIEngine
-from core.errors import RuntimeError as QFRuntimeError
+from core.errors import QFRuntimeError
 from core.text_utils import interpolate_text
 
 
@@ -124,6 +124,8 @@ class Interpreter:
             if self.runtime.pending_jump or self.runtime.pending_dialogues or self.runtime.pending_input:
                 return
             if self.runtime.pending_save or self.runtime.pending_load or self.runtime.pending_quit:
+                return
+            if self.runtime.pending_audio:
                 return
 
     def _collect_labels(self, program: Program, namespace: str = None):

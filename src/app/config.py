@@ -15,6 +15,48 @@ GAMES_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG_FILE = DATA_DIR / "config.json"
 
 
+def _scan_project_dir(proj_dir: Path) -> dict:
+    project_id = proj_dir.name
+    info = {
+        "id": project_id,
+        "name": project_id,
+        "path": str(proj_dir),
+        "title": project_id,
+        "author": "",
+        "version": "",
+        "has_script": False,
+        "script_main": "",
+    }
+
+    toml_path = proj_dir / "project.toml"
+    if toml_path.exists():
+        try:
+            cfg = toml.load(toml_path)
+            proj = cfg.get("project", {})
+            info["title"] = proj.get("title", project_id)
+            info["author"] = proj.get("author", "")
+            info["version"] = proj.get("version", "")
+            display = cfg.get("display")
+            if display:
+                info["display"] = display
+        except Exception:
+            pass
+
+    script_dir = proj_dir / "script"
+    if script_dir.exists():
+        main_script = script_dir / "main.qf"
+        if main_script.exists():
+            info["has_script"] = True
+            info["script_main"] = str(main_script)
+        else:
+            qf_files = list(script_dir.glob("*.qf"))
+            if qf_files:
+                info["has_script"] = True
+                info["script_main"] = str(qf_files[0])
+
+    return info
+
+
 class ConfigStore:
     _defaults = {
         "theme": "dark",
@@ -105,83 +147,20 @@ class ConfigStore:
 
 
 class ProjectStore:
-    @staticmethod
-    def _scan() -> list:
+    def get_projects(self) -> list:
         if not GAMES_DIR.exists():
             return []
         projects = []
         for d in sorted(GAMES_DIR.iterdir()):
-            if not d.is_dir():
-                continue
-            toml_path = d / "project.toml"
-            info = {
-                "id": d.name,
-                "name": d.name,
-                "path": str(d),
-                "title": d.name,
-                "author": "",
-                "version": "",
-                "has_script": False,
-                "script_main": "",
-            }
-            if toml_path.exists():
-                try:
-                    cfg = toml.load(toml_path)
-                    proj = cfg.get("project", {})
-                    info["title"] = proj.get("title", d.name)
-                    info["author"] = proj.get("author", "")
-                    info["version"] = proj.get("version", "")
-                except Exception:
-                    pass
-
-            script_dir = d / "script"
-            if script_dir.exists():
-                main_script = script_dir / "main.qf"
-                if main_script.exists():
-                    info["has_script"] = True
-                    info["script_main"] = str(main_script)
-                else:
-                    qf_files = list(script_dir.glob("*.qf"))
-                    if qf_files:
-                        info["has_script"] = True
-                        info["script_main"] = str(qf_files[0])
-
-            projects.append(info)
+            if d.is_dir():
+                projects.append(_scan_project_dir(d))
         return projects
-
-    def get_projects(self) -> list:
-        return self._scan()
 
     def get_project(self, project_id: str) -> dict | None:
         proj_dir = GAMES_DIR / project_id
         if not proj_dir.exists():
             return None
-        info = {"id": project_id, "name": project_id, "path": str(proj_dir)}
-        toml_path = proj_dir / "project.toml"
-        if toml_path.exists():
-            try:
-                cfg = toml.load(toml_path)
-                proj = cfg.get("project", {})
-                info["title"] = proj.get("title", project_id)
-                info["author"] = proj.get("author", "")
-                info["version"] = proj.get("version", "")
-                info["display"] = cfg.get("display", {})
-            except Exception:
-                pass
-
-        script_dir = proj_dir / "script"
-        if script_dir.exists():
-            main_script = script_dir / "main.qf"
-            if main_script.exists():
-                info["has_script"] = True
-                info["script_main"] = str(main_script)
-            else:
-                qf_files = list(script_dir.glob("*.qf"))
-                if qf_files:
-                    info["has_script"] = True
-                    info["script_main"] = str(qf_files[0])
-
-        return info
+        return _scan_project_dir(proj_dir)
 
     def import_project(self, zip_path: str) -> str:
         zip_path = Path(zip_path)

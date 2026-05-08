@@ -42,9 +42,10 @@ class AIEngine:
     def _call_deepseek(self, prompt: str) -> str:
         try:
             from openai import OpenAI
+            base_url = self.config.get("url", "https://api.deepseek.com")
             client = OpenAI(
                 api_key=self.api_key,
-                base_url="https://api.deepseek.com",
+                base_url=base_url,
             )
             resp = client.chat.completions.create(
                 model=self.model or "deepseek-chat",

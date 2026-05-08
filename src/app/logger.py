@@ -1,3 +1,4 @@
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -9,15 +10,17 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 class AppLogger:
     def __init__(self):
+        self._lock = threading.Lock()
         self._log_path = LOG_DIR / f"app_{datetime.now().strftime('%Y%m%d')}.log"
 
     def _log(self, level: str, message: str):
         line = f"[{datetime.now().isoformat()}] [{level.upper()}] {message}"
-        try:
-            with open(self._log_path, "a", encoding="utf-8") as f:
-                f.write(line + "\n")
-        except OSError:
-            pass
+        with self._lock:
+            try:
+                with open(self._log_path, "a", encoding="utf-8") as f:
+                    f.write(line + "\n")
+            except OSError:
+                pass
 
     def debug(self, message: str):
         self._log("debug", message)
@@ -32,9 +35,10 @@ class AppLogger:
         self._log("error", message)
 
     def get_logs(self, limit: int = 200) -> list:
-        if not self._log_path.exists():
-            return []
-        lines = self._log_path.read_text(encoding="utf-8").strip().split("\n")
+        with self._lock:
+            if not self._log_path.exists():
+                return []
+            lines = self._log_path.read_text(encoding="utf-8").strip().split("\n")
         return lines[-limit:]
 
 

@@ -1,13 +1,11 @@
-"""QriaFiction - 互动小说脚本语言解释器"""
-
 from core.lexer import Lexer
 from core.parser import Parser
 from core.interpreter import Interpreter
 from core.runtime import Runtime
-from core.errors import LexerError, SyntaxError, SemanticError, RuntimeError
+from core.errors import LexerError, QFSyntaxError, SemanticError, QFRuntimeError
 
 
-def compile_source(source: str, filename: str = "<source>") -> Interpreter:
+def compile_source(source: str, filename: str = "<source>"):
     lexer = Lexer(source, filename)
     tokens = lexer.tokenize()
     parser = Parser(tokens, filename)
@@ -16,7 +14,7 @@ def compile_source(source: str, filename: str = "<source>") -> Interpreter:
     return interp, program
 
 
-def run_source(source: str, filename: str = "<source>", ai_config: dict = None) -> Interpreter:
+def run_source(source: str, filename: str = "<source>", ai_config: dict = None):
     interp, program = compile_source(source, filename)
     interp = Interpreter(ai_config=ai_config)
     interp.run(program)
@@ -31,7 +29,7 @@ __all__ = [
     "compile_source",
     "run_source",
     "LexerError",
-    "SyntaxError",
+    "QFSyntaxError",
     "SemanticError",
-    "RuntimeError",
+    "QFRuntimeError",
 ]

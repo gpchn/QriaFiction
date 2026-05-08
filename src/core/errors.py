@@ -22,7 +22,7 @@ class LexerError(QriaFictionError):
     pass
 
 
-class SyntaxError(QriaFictionError):
+class QFSyntaxError(QriaFictionError):
     pass
 
 
@@ -30,5 +30,5 @@ class SemanticError(QriaFictionError):
     pass
 
 
-class RuntimeError(QriaFictionError):
+class QFRuntimeError(QriaFictionError):
     pass

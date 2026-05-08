@@ -69,11 +69,11 @@ end
         ch1_src = '''
 label begin:
     set step = 2
-    jump ch2.end
+    jump ch2.finale
 end
 '''
         ch2_src = '''
-label end:
+label finale:
     set step = 3
 end
 '''
@@ -110,7 +110,7 @@ end
         main_src = '''
 var result = "main"
 label start:
-    jump ch1.start
+    jump ch1.intro
 end
 label main_end:
     set result = "main_end"
@@ -118,11 +118,11 @@ end
 '''
         ch1_src = '''
 var ch1_result = "ch1"
-label start:
+label intro:
     set ch1_result = "started"
     jump main_end
 end
-label end:
+label ch1_end:
     set ch1_result = "ch1_end"
 end
 '''
