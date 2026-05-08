@@ -177,13 +177,38 @@ class QuitStmt(Stmt):
 
 
 @dataclass
-class PythonBlockStmt(Stmt):
-    code: str = ""
+class PlayMusicStmt(Stmt):
+    path: str = ""
+    loop: bool = True
+    volume: float = 1.0
+    fade_in: float = 0.0
 
 
 @dataclass
-class IncludeStmt(Stmt):
+class PlaySoundStmt(Stmt):
     path: str = ""
+    volume: float = 1.0
+
+
+@dataclass
+class StopMusicStmt(Stmt):
+    fade_out: float = 0.0
+
+
+@dataclass
+class StopSoundStmt(Stmt):
+    pass
+
+
+@dataclass
+class SetVolumeStmt(Stmt):
+    music_volume: float = -1.0
+    sound_volume: float = -1.0
+
+
+@dataclass
+class PythonBlockStmt(Stmt):
+    code: str = ""
 
 
 @dataclass

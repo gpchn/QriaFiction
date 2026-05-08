@@ -9,7 +9,7 @@ QriaFiction 是一个基于 Python 的互动小说引擎，包含自定义脚本
 - **AI 意图识别** - 互动模式下支持 OpenAI API、DeepSeek API 和本地模糊匹配（fuzzywuzzy）
 - **桌面 GUI** - 基于 pywebview + Vue 3 + Tailwind CSS 的现代界面
 - **存档系统** - JSON 格式存档，支持多存档槽位
-- **多脚本支持** - `include` 语句加载外部脚本文件
+- **多脚本自动加载** - 引擎自动扫描 `script/` 目录下所有 `.qf` 文件，按文件名命名空间管理标签
 - **字符串插值** - `{variable}` 和 `{python: expression}` 语法
 
 ## 安装
@@ -103,15 +103,31 @@ input name "请输入你的名字："
 #### 标签与跳转
 
 ```qfscript
+# main.qf 中的标签（不加命名空间前缀）
 label start:
     yuki "你好！"
-    jump next_scene
+    jump ch1_prologue.begin  # 跳转到 ch1_prologue.qf
 end
 
+# ch1_prologue.qf
+label begin:
+    yuki "欢迎来到序章..."
+    call events.greeting     # 调用 events.qf 中的标签
+end
+
+# events.qf
+label greeting:
+    yuki "早上好！"
+    return
+end
+
+# 条件跳转
 jump scene_a if flag_a == true
 call event_daily
 return
 ```
+
+> **多脚本支持**：引擎自动扫描 `script/` 目录下所有 `.qf` 文件。文件名自动成为标签命名空间前缀（如 `ch1_prologue.qf` 中的 `label begin:` 变为 `ch1_prologue.begin`）。`main.qf` 中的标签无前缀。
 
 #### 条件与循环
 
@@ -168,7 +184,19 @@ wait click             # 等待点击
 save                   # 存档
 load                   # 读档
 quit                   # 结束游戏
-include "chapter2.qf"  # 加载外部脚本
+```
+
+#### 音频
+
+```qfscript
+music "audio/bgm/main.mp3"             # 播放背景音乐（循环）
+music "audio/bgm/tension.mp3" with fade 2.0  # 淡入播放
+sound "audio/sfx/door.wav"             # 播放音效
+stop music                             # 停止音乐
+stop music with fade 3.0               # 淡出停止
+stop sound                             # 停止音效
+volume music = 0.7                     # 设置音乐音量
+volume sound = 0.5                     # 设置音效音量
 ```
 
 ### 完整语法规范

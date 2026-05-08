@@ -42,8 +42,12 @@ class Runtime:
         self.pending_save = False
         self.pending_load = False
         self.pending_quit = False
+        self.pending_audio: dict | None = None
         self._save_slot: str = "autosave"
         self._load_slot: str = "autosave"
+        self.music_volume: float = 1.0
+        self.sound_volume: float = 1.0
+        self.current_music: str | None = None
 
     def get(self, name: str):
         if name.startswith("_"):

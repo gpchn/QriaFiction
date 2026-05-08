@@ -46,11 +46,11 @@ end
 label demo_bg:
     narrator "=== 背景演示 ==="
 
-    bg "bg/school.png"
-    narrator "已设置背景：bg/school.png"
+    bg "1.jpg"
+    narrator "已设置背景：1.jpg"
 
-    bg "bg/classroom.png"
-    narrator "已更换背景：bg/classroom.png"
+    bg "2.jpg"
+    narrator "已更换背景：2.jpg"
 
     bg none
     narrator "已清除背景（透明）"

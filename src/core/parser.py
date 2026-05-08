@@ -91,8 +91,14 @@ class Parser:
             return self._parse_python()
         elif tok.type == TokenType.PYTHON_CODE:
             return self._parse_python_code()
-        elif tok.type == TokenType.INCLUDE:
-            return self._parse_include()
+        elif tok.type == TokenType.MUSIC:
+            return self._parse_music()
+        elif tok.type == TokenType.SOUND:
+            return self._parse_sound()
+        elif tok.type == TokenType.STOP:
+            return self._parse_stop_audio()
+        elif tok.type == TokenType.VOLUME:
+            return self._parse_volume()
         elif tok.type == TokenType.BREAK:
             self._advance()
             return BreakStmt(line=tok.line, col=tok.col)
@@ -157,6 +163,84 @@ class Parser:
             return BgStmt(path=tok.value)
         else:
             raise SyntaxError(f"期望字符串或 none，得到 {tok.type.name}", tok.line, tok.col, self.filename)
+
+    def _parse_music(self) -> PlayMusicStmt:
+        self._expect(TokenType.MUSIC)
+        path = self._expect(TokenType.STRING)
+        stmt = PlayMusicStmt(path=path.value)
+        while self._peek().type in (TokenType.WITH, TokenType.VOLUME, TokenType.LOOP):
+            tok = self._peek()
+            if tok.type == TokenType.WITH:
+                self._advance()
+                kw = self._peek()
+                if kw.type == TokenType.FADE:
+                    self._advance()
+                    dur = self._expect(TokenType.NUMBER)
+                    stmt.fade_in = dur.value
+                elif kw.type == TokenType.VOLUME:
+                    self._advance()
+                    vol = self._expect(TokenType.NUMBER)
+                    stmt.volume = vol.value
+            elif tok.type == TokenType.VOLUME:
+                self._advance()
+                vol = self._expect(TokenType.NUMBER)
+                stmt.volume = vol.value
+            elif tok.type == TokenType.LOOP:
+                self._advance()
+                val = self._peek()
+                if val.type in (TokenType.TRUE, TokenType.FALSE):
+                    self._advance()
+                    stmt.loop = (val.type == TokenType.TRUE)
+                else:
+                    stmt.loop = True
+        return stmt
+
+    def _parse_sound(self) -> PlaySoundStmt:
+        self._expect(TokenType.SOUND)
+        path = self._expect(TokenType.STRING)
+        stmt = PlaySoundStmt(path=path.value)
+        if self._peek().type == TokenType.VOLUME:
+            self._advance()
+            vol = self._expect(TokenType.NUMBER)
+            stmt.volume = vol.value
+        return stmt
+
+    def _parse_stop_audio(self) -> Stmt:
+        self._expect(TokenType.STOP)
+        tok = self._peek()
+        if tok.type == TokenType.MUSIC:
+            self._advance()
+            stmt = StopMusicStmt()
+            if self._peek().type == TokenType.WITH:
+                self._advance()
+                kw = self._peek()
+                if kw.type == TokenType.FADE:
+                    self._advance()
+                    dur = self._expect(TokenType.NUMBER)
+                    stmt.fade_out = dur.value
+            return stmt
+        elif tok.type == TokenType.SOUND:
+            self._advance()
+            return StopSoundStmt()
+        else:
+            raise SyntaxError(f"期望 music 或 sound，得到 {tok.type.name}", tok.line, tok.col, self.filename)
+
+    def _parse_volume(self) -> SetVolumeStmt:
+        self._expect(TokenType.VOLUME)
+        stmt = SetVolumeStmt()
+        if self._peek().type == TokenType.MUSIC:
+            self._advance()
+            self._expect(TokenType.ASSIGN)
+            vol = self._expect(TokenType.NUMBER)
+            stmt.music_volume = vol.value
+        elif self._peek().type == TokenType.SOUND:
+            self._advance()
+            self._expect(TokenType.ASSIGN)
+            vol = self._expect(TokenType.NUMBER)
+            stmt.sound_volume = vol.value
+        else:
+            raise SyntaxError(f"期望 music 或 sound，得到 {self._peek().type.name}", self._peek().line, self._peek().col, self.filename)
+        return stmt
 
     def _parse_interact(self) -> InteractStmt:
         self._expect(TokenType.INTERACT)
@@ -293,12 +377,17 @@ class Parser:
 
     def _parse_call(self) -> CallStmt:
         self._expect(TokenType.CALL)
-        target = self._expect(TokenType.IDENTIFIER)
+        tok = self._peek()
+        if tok.type in (TokenType.IDENTIFIER, TokenType.END, TokenType.LABEL):
+            self._advance()
+        else:
+            raise SyntaxError(f"期望标签名，但得到 {tok.type.name} ({tok.value!r})", tok.line, tok.col, self.filename)
+        target = tok.value
         condition = None
         if self._peek().type == TokenType.IF:
             self._advance()
             condition = self._parse_expression()
-        return CallStmt(target=target.value, condition=condition)
+        return CallStmt(target=target, condition=condition)
 
     def _parse_var(self) -> VarStmt:
         self._expect(TokenType.VAR)
@@ -415,11 +504,6 @@ class Parser:
         if self._peek().type == TokenType.END:
             self._advance()
         return PythonBlockStmt(code=tok.value)
-
-    def _parse_include(self) -> IncludeStmt:
-        self._expect(TokenType.INCLUDE)
-        path = self._expect(TokenType.STRING)
-        return IncludeStmt(path=path.value)
 
     def _parse_expression(self) -> Expr:
         return self._parse_or()

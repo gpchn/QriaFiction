@@ -50,7 +50,9 @@ QriaFiction/
 │   ├── games/               # 游戏项目目录
 │   │   └── demo/            # 示例项目
 │   │       ├── script/
-│   │       │   └── main.qf
+│   │       │   ├── main.qf          # 主脚本
+│   │       │   ├── ch1_prologue.qf  # 其他章节
+│   │       │   └── events.qf        # 事件脚本
 │   │       └── project.toml
 │   ├── config.json          # 应用配置
 │   └── logs/                # 日志文件
@@ -58,6 +60,35 @@ QriaFiction/
 │   └── language_spec.md     # 语言规范文档
 ├── pyproject.toml
 └── uv.lock
+```
+
+### 多脚本自动加载
+
+**引擎自动扫描 `script/` 目录下所有 `.qf` 文件**，无需手动 `include`。
+
+**命名规则：**
+- 文件名自动成为标签命名空间前缀
+- 引用格式：`文件名.标签名`（不含 .qf）
+- `main.qf` 中的标签无前缀
+
+```qfscript
+# ch1_prologue.qf
+label start:
+    yuki "序章开始！"
+    jump ch2_school.begin
+end
+
+# ch2_school.qf
+label begin:
+    yuki "来到学校..."
+    call events.daily_greeting
+end
+
+# events.qf
+label daily_greeting:
+    yuki "早上好！"
+    return
+end
 ```
 
 ## QFScript 语言规范
@@ -77,7 +108,7 @@ QriaFiction/
               | <interact_stmt> | <label_stmt> | <jump_stmt> | <call_stmt>
               | <return_stmt> | <var_stmt> | <set_stmt> | <input_stmt>
               | <if_stmt> | <while_stmt> | <wait_stmt> | <system_stmt>
-              | <python_block> | <include_stmt>
+              | <python_block>
 
 <comment> ::= "#" <text> "\n"
 
@@ -118,8 +149,6 @@ QriaFiction/
 <system_stmt> ::= ("save" | "load" | "quit") "\n"
 
 <python_block> ::= "python:" "\n" <python_code> "end" "\n"
-
-<include_stmt> ::= "include" <string> "\n"
 
 <interact_stmt> ::= "interact:" "\n" <interact_item>* "end" "\n"
 

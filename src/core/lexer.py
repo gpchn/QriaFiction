@@ -91,7 +91,7 @@ class Lexer:
 
             if ch.isalpha() or ch == "_":
                 j = i
-                while j < len(text) and (text[j].isalnum() or text[j] == "_"):
+                while j < len(text) and (text[j].isalnum() or text[j] == "_" or text[j] == "."):
                     j += 1
                 word = text[i:j]
                 tokens.append(Token(KEYWORDS.get(word, TokenType.IDENTIFIER), word, line_num, col_offset + i))

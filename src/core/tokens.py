@@ -36,7 +36,6 @@ class TokenType(Enum):
     QUIT = auto()
     PYTHON = auto()
     PYTHON_CODE = auto()
-    INCLUDE = auto()
     END = auto()
     WITH = auto()
     AT = auto()
@@ -46,6 +45,7 @@ class TokenType(Enum):
     VOLUME = auto()
     FADE = auto()
     STOP = auto()
+    LOOP = auto()
     TRUE = auto()
     FALSE = auto()
     AND = auto()
@@ -111,11 +111,16 @@ KEYWORDS = {
     "load": TokenType.LOAD,
     "quit": TokenType.QUIT,
     "python": TokenType.PYTHON,
-    "include": TokenType.INCLUDE,
     "end": TokenType.END,
     "with": TokenType.WITH,
     "at": TokenType.AT,
     "otherwise": TokenType.OTHERWISE,
+    "music": TokenType.MUSIC,
+    "sound": TokenType.SOUND,
+    "volume": TokenType.VOLUME,
+    "fade": TokenType.FADE,
+    "stop": TokenType.STOP,
+    "loop": TokenType.LOOP,
     "true": TokenType.TRUE,
     "false": TokenType.FALSE,
     "and": TokenType.AND,

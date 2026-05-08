@@ -284,20 +284,49 @@ window.addEventListener('pywebviewready', () => {
             window.addMessage = addMsg;
             window.setBackground = (path) => {
                 const bgLayer = document.getElementById('bgLayer');
-                const overlay = document.getElementById('bgOverlay');
+                console.log('[bg] setBackground called, path length:', path ? path.length : 0, 'bgLayer found:', !!bgLayer);
                 if (path) {
                     if (bgLayer) {
-                        bgLayer.style.backgroundImage = `url('${path}')`;
+                        bgLayer.style.backgroundImage = 'url("' + path + '")';
+                        bgLayer.style.backgroundPosition = 'center center';
+                        bgLayer.style.backgroundSize = 'cover';
+                        bgLayer.style.backgroundRepeat = 'no-repeat';
                         bgLayer.style.opacity = '1';
                     }
-                    if (overlay) overlay.style.opacity = '0.3';
                 } else {
                     if (bgLayer) {
                         bgLayer.style.backgroundImage = '';
                         bgLayer.style.opacity = '0';
                     }
-                    if (overlay) overlay.style.opacity = '0.7';
                 }
+            };
+            window.loadBackground = (absPath) => {
+                console.log('[bg] loadBackground called, absPath:', absPath);
+                if (!absPath) {
+                    window.setBackground('');
+                    if (pywebview && pywebview.api && pywebview.api.bg_image_loaded) {
+                        pywebview.api.bg_image_loaded();
+                    }
+                    return;
+                }
+                pywebview.api.get_bg_image(absPath).then(result => {
+                    const dataUrl = result && result.data && result.data.data;
+                    console.log('[bg] get_bg_image result, dataUrl length:', dataUrl ? dataUrl.length : 0);
+                    if (dataUrl) {
+                        window.setBackground(dataUrl);
+                    } else {
+                        window.setBackground('');
+                    }
+                    if (pywebview && pywebview.api && pywebview.api.bg_image_loaded) {
+                        pywebview.api.bg_image_loaded();
+                    }
+                }).catch(err => {
+                    console.error('loadBackground error:', err);
+                    window.setBackground('');
+                    if (pywebview && pywebview.api && pywebview.api.bg_image_loaded) {
+                        pywebview.api.bg_image_loaded();
+                    }
+                });
             };
             window.setStatus = (t) => { gameStatus.value = t; };
             window.getUserInput = (prompt) => {
@@ -316,6 +345,98 @@ window.addEventListener('pywebviewready', () => {
             window.showSaveMessage = (msg) => {
                 addMsg('system', msg, '', '', '');
                 showContinueHint.value = true;
+            };
+
+            // ==================== AUDIO ====================
+            const AudioCtx = {
+                musicPlayer: null,
+                soundPlayers: [],
+                musicVolume: 1.0,
+                soundVolume: 1.0,
+            };
+
+            window.playMusic = (path, volume = 1.0, loop = true, fadeIn = 0.0) => {
+                if (AudioCtx.musicPlayer) {
+                    AudioCtx.musicPlayer.pause();
+                    AudioCtx.musicPlayer = null;
+                }
+                if (!path) return;
+                const audio = new Audio(path);
+                audio.loop = loop;
+                audio.volume = 0;
+                audio.play().catch(() => {});
+                AudioCtx.musicPlayer = audio;
+
+                const targetVol = volume * AudioCtx.musicVolume;
+                if (fadeIn > 0) {
+                    const steps = 30;
+                    const interval = (fadeIn * 1000) / steps;
+                    let step = 0;
+                    const timer = setInterval(() => {
+                        step++;
+                        audio.volume = (step / steps) * targetVol;
+                        if (step >= steps) {
+                            audio.volume = targetVol;
+                            clearInterval(timer);
+                        }
+                    }, interval);
+                } else {
+                    audio.volume = targetVol;
+                }
+            };
+
+            window.playSound = (path, volume = 1.0) => {
+                if (!path) return;
+                const audio = new Audio(path);
+                audio.volume = volume * AudioCtx.soundVolume;
+                audio.play().catch(() => {});
+                AudioCtx.soundPlayers.push(audio);
+                audio.onended = () => {
+                    const idx = AudioCtx.soundPlayers.indexOf(audio);
+                    if (idx !== -1) AudioCtx.soundPlayers.splice(idx, 1);
+                };
+            };
+
+            window.stopMusic = (fadeOut = 0.0) => {
+                if (!AudioCtx.musicPlayer) return;
+                if (fadeOut > 0) {
+                    const steps = 30;
+                    const interval = (fadeOut * 1000) / steps;
+                    let step = 0;
+                    const currentVol = AudioCtx.musicPlayer.volume;
+                    const timer = setInterval(() => {
+                        step++;
+                        AudioCtx.musicPlayer.volume = currentVol * (1 - step / steps);
+                        if (step >= steps) {
+                            AudioCtx.musicPlayer.pause();
+                            AudioCtx.musicPlayer = null;
+                            clearInterval(timer);
+                        }
+                    }, interval);
+                } else {
+                    AudioCtx.musicPlayer.pause();
+                    AudioCtx.musicPlayer = null;
+                }
+            };
+
+            window.stopSound = () => {
+                AudioCtx.soundPlayers.forEach(a => { a.pause(); });
+                AudioCtx.soundPlayers = [];
+            };
+
+            window.setVolume = (musicVol = -1.0, soundVol = -1.0) => {
+                if (musicVol >= 0) {
+                    AudioCtx.musicVolume = musicVol;
+                    if (AudioCtx.musicPlayer) {
+                        AudioCtx.musicPlayer.volume = musicVol * (AudioCtx.musicPlayer._targetVolume || 1.0);
+                    }
+                }
+                if (soundVol >= 0) {
+                    AudioCtx.soundVolume = soundVol;
+                    AudioCtx.soundPlayers.forEach(a => {
+                        a.volume = soundVol;
+                    });
+                }
             };
 
             watch(messages, () => {

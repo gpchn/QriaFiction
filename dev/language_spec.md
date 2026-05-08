@@ -8,15 +8,53 @@
 
 ```
 project/
-├── script/              # 脚本目录
-│   ├── main.qf          # 主脚本
-│   └── chapter1.qf      # 其他章节
+├── script/              # 脚本目录（所有 .qf 文件在此）
+│   ├── main.qf          # 主脚本（入口）
+│   ├── ch1_prologue.qf  # 第一章（可选）
+│   ├── ch2_school.qf    # 第二章（可选）
+│   ├── ch3_mystery.qf   # 第三章（可选）
+│   ├── daily_events.qf  # 日常事件（可选）
+│   └── romance_events.qf # 恋爱事件（可选）
 ├── assets/              # 资源目录
 │   ├── bg/              # 背景图片
 │   └── avatar/          # 头像图片
 ├── project.toml         # 项目配置
 └── main.py              # 启动入口（可选）
 ```
+
+### 多脚本自动加载
+
+**引擎会在游戏启动时自动扫描 `script/` 目录下所有 `.qf` 文件**。
+
+**命名规则：** 文件名自动成为标签的命名空间前缀。
+
+```qfscript
+# 文件: ch1_prologue.qf
+label start:
+    yuki "欢迎来到序章！"
+    jump ch2_school.begin  # 跳转到 ch2_school.qf 的 begin 标签
+end
+
+# 文件: ch2_school.qf
+label begin:
+    yuki "这是第二章..."
+    call daily_events.greeting  # 调用 daily_events.qf 的 greeting 标签
+end
+
+# 文件: daily_events.qf
+label greeting:
+    yuki "早上好！"
+    return
+end
+```
+
+**标签引用格式：** `文件名.标签名`（不含 .qf 扩展名）
+
+**特殊规则：**
+
+- `main.qf` 中的标签**不加命名空间前缀**，保持简洁（如 `jump start` 而非 `jump main.start`）
+- 所有其他 `.qf` 文件的标签自动添加文件名前缀
+- 避免不同文件的标签名冲突
 
 ### project.toml
 
@@ -71,6 +109,7 @@ define narrator = character(name="", avatar="", color="#888888")
 ```
 
 **参数说明：**
+
 - `name`：显示名称（空字符串则不显示名称）
 - `avatar`：头像图片路径（空字符串则无头像）
 - `color`：名称颜色
@@ -126,11 +165,13 @@ end
 ```
 
 **语法规则：**
+
 - `"动作名" -> 标签 (desc="描述")` - 可匹配的动作
 - `"动作名" -> 标签 (desc="...", condition=表达式)` - 条件动作（变量表达式为真时才可用）
 - `fallback "..."` - 匹配失败时的回复（**必需**，至少一条）
 
 **行为：**
+
 1. 等待用户输入
 2. AI 匹配用户输入到某个动作
 3. **匹配成功** → 更新 `_user_input` 和 `_matched_action`，跳转到对应标签，退出
@@ -231,6 +272,53 @@ load           # 加载游戏
 quit           # 退出游戏
 ```
 
+### 4.10 音频
+
+#### 背景音乐
+
+```qfscript
+# 播放背景音乐（循环播放）
+music "audio/bgm/peaceful.mp3"
+
+# 带淡入效果
+music "audio/bgm/tension.mp3" with fade 2.0
+
+# 指定音量（0.0 - 1.0）
+music "audio/bgm/sad.mp3" volume 0.5
+
+# 不循环
+music "audio/bgm/intro.mp3" loop false
+
+# 停止背景音乐
+stop music
+
+# 带淡出效果停止
+stop music with fade 3.0
+```
+
+#### 音效
+
+```qfscript
+# 播放音效（不循环）
+sound "audio/sfx/door_open.wav"
+
+# 指定音量
+sound "audio/sfx/explosion.wav" volume 0.8
+
+# 停止所有音效
+stop sound
+```
+
+#### 音量控制
+
+```qfscript
+# 设置音乐音量
+volume music = 0.7
+
+# 设置音效音量
+volume sound = 0.5
+```
+
 ---
 
 ## 5. 嵌入 Python
@@ -249,7 +337,7 @@ end
 python:
     def check_victory():
         return qf.get("hp") > 0 and qf.get("enemy_hp") <= 0
-    
+
     if check_victory():
         qf.jump("victory_scene")
     else:
@@ -299,7 +387,10 @@ qf.matched_action      # 内置变量: 当前匹配到的动作名
               | <wait_stmt>
               | <system_stmt>
               | <python_block>
-              | <include_stmt>
+              | <music_stmt>
+              | <sound_stmt>
+              | <stop_audio_stmt>
+              | <volume_stmt>
 
 <comment> ::= "#" <text> "\n"
 
@@ -328,9 +419,9 @@ qf.matched_action      # 内置变量: 当前匹配到的动作名
 
 <input_stmt> ::= "input" <identifier> <string> "\n"
 
-<if_stmt> ::= "if" <expr> ":" "\n" <statement>* 
-              ("elseif" <expr> ":" "\n" <statement>*)* 
-              ("else:" "\n" <statement>*)? 
+<if_stmt> ::= "if" <expr> ":" "\n" <statement>*
+              ("elseif" <expr> ":" "\n" <statement>*)*
+              ("else:" "\n" <statement>*)?
               "end" "\n"
 
 <while_stmt> ::= "while" <expr> ":" "\n" <statement>* "end" "\n"
@@ -341,19 +432,29 @@ qf.matched_action      # 内置变量: 当前匹配到的动作名
 
 <python_block> ::= "python:" "\n" <python_code> "end" "\n"
 
-<include_stmt> ::= "include" <string> "\n"
+<music_stmt> ::= "music" <string>
+                 ["loop" <boolean>]
+                 ["volume" <number>]
+                 ["with" "fade" <number>] "\n"
 
-<interact_stmt> ::= "interact:" "\n" 
-                    <interact_item>* 
+<sound_stmt> ::= "sound" <string>
+                 ["volume" <number>] "\n"
+
+<stop_audio_stmt> ::= "stop" ("music" ["with" "fade" <number>] | "sound") "\n"
+
+<volume_stmt> ::= "volume" ("music" | "sound") "=" <number> "\n"
+
+<interact_stmt> ::= "interact:" "\n"
+                    <interact_item>*
                     "end" "\n"
 
 <interact_item> ::= <interact_action>
                   | <interact_fallback>
 
-<interact_action> ::= <string> "->" <identifier> 
+<interact_action> ::= <string> "->" <identifier>
                       "(" <action_param_list> ")" "\n"
 
-<action_param_list> ::= "desc" "=" <string> 
+<action_param_list> ::= "desc" "=" <string>
                         ["," "condition" "=" <expr>]
 
 <interact_fallback> ::= "fallback" <string> "\n"
@@ -391,7 +492,7 @@ qf.matched_action      # 内置变量: 当前匹配到的动作名
     │
     ▼  Token 流
 ┌──────────────┘
-│   语法分析    │  Parser  
+│   语法分析    │  Parser
 └──────────────┘
     │
     ▼  AST
@@ -415,11 +516,11 @@ class Interpreter:
         self.call_stack = []         # 调用栈
         self.current_pos = 0         # 当前执行位置
         self.ast = None              # 解析后的 AST
-    
+
     def execute(self, node):
         """执行单个 AST 节点"""
         pass
-    
+
     def execute_program(self, ast):
         """执行程序"""
         pass
@@ -449,33 +550,33 @@ class AIEngine:
         self.provider = config.provider
         self.model = config.model
         self.api_key = config.api_key
-    
-    def match_action(self, 
-                     user_input: str, 
+
+    def match_action(self,
+                     user_input: str,
                      actions: List[Action],
                      runtime: Runtime) -> Optional[str]:
         """
         将用户输入匹配到可用动作
-        
+
         自动获取上下文：
         - 当前标签
         - 角色列表及其设定
         - 当前背景
         - 变量状态
-        
+
         返回: 匹配的动作名称，或 None（未匹配）
         """
         prompt = self._build_prompt(user_input, actions, runtime)
         response = self._call_llm(prompt)
         return self._parse_response(response)
-    
-    def _build_prompt(self, 
-                      user_input: str, 
+
+    def _build_prompt(self,
+                      user_input: str,
                       actions: List[Action],
                       runtime: Runtime) -> str:
         """
         构建 AI 提示词
-        
+
         自动包含：
         - 角色定义（name, 性格暗示）
         - 当前场景状态
@@ -487,7 +588,7 @@ class AIEngine:
 """
         for char in runtime.characters.values():
             prompt += f"- {char.name}\n"
-        
+
         prompt += f"""
 【当前状态】
 标签: {runtime.current_label}
@@ -496,19 +597,19 @@ class AIEngine:
 """
         for i, action in enumerate(actions, 1):
             prompt += f"{i}. {action.name} - {action.desc}\n"
-        
+
         prompt += f"""
 【用户输入】
 {user_input}
 
 请从可用动作中选择最匹配的一个，只返回动作名称。如果无法匹配，返回 NONE。"""
-        
+
         return prompt
-    
+
     def _call_llm(self, prompt: str) -> str:
         """调用 LLM API"""
         pass
-    
+
     def _parse_response(self, response: str) -> Optional[str]:
         """解析 LLM 返回的动作名"""
         response = response.strip()
@@ -522,12 +623,12 @@ class AIEngine:
 ```python
 class InteractProcessor:
     """互动模式处理器"""
-    
+
     def __init__(self, interpreter: Interpreter, ai_engine: AIEngine):
         self.interpreter = interpreter
         self.ai = ai_engine
-    
-    def run(self, 
+
+    def run(self,
             prompt: str = None,
             timeout: float = None,
             default_label: str = None,
@@ -535,29 +636,29 @@ class InteractProcessor:
             fallback_msgs: List[str] = None):
         """
         运行互动模式
-        
+
         循环直到：
         1. 匹配到动作 → 跳转并退出
         2. 超时 → 跳转 default 并退出
         """
         if prompt:
             self.show_message(prompt)
-        
+
         while True:
             user_input = self.get_user_input(timeout=timeout)
-            
+
             if user_input is None:  # 超时
                 if default_label:
                     self.interpreter.jump(default_label)
                 return
-            
+
             # AI 匹配
             matched = self.ai.match_action(
-                user_input, 
-                actions, 
+                user_input,
+                actions,
                 self.interpreter.runtime
             )
-            
+
             if matched:
                 # 匹配成功，更新内置变量
                 self.interpreter.runtime.set("_user_input", user_input)
@@ -581,6 +682,7 @@ input _name "请输入你的名字："
 ```
 
 **与互动模式的区别：**
+
 - `interact` - 用户输入被 AI 理解并映射到预定义动作，循环直到匹配成功
 - `input` - 获取一次文本输入，存入变量，由作者处理
 
@@ -631,12 +733,12 @@ var relationship = 0
 label start:
     system "欢迎来到这个世界！"
     input _name "请输入你的名字："
-    
+
     bg "bg/school_gate.png"
-    
+
     yuki "早上好，{_name}！"
     yuki "今天要去哪里呢？"
-    
+
     interact:
         "去游乐园" -> route_park (desc="前往游乐园玩")
         "去图书馆" -> route_library (desc="去图书馆看书")
@@ -682,9 +784,9 @@ label fight:
         qf.set("enemy_hp", qf.get("enemy_hp") - damage)
         qf.set("hp", qf.get("hp") - random.randint(5, 15))
     end
-    
+
     yuki "造成了伤害！"
-    
+
     # 检查胜负
     python:
         if qf.get("enemy_hp") <= 0:

@@ -7,6 +7,7 @@
 ## 角色
 
 你是 QriaFiction 互动小说引擎的开发专家。你精通：
+
 - Python 3.12+ 编程
 - 编程语言/解释器实现（词法分析、语法分析、AST、解释执行）
 - pywebview 桌面应用开发
@@ -16,6 +17,7 @@
 ## 项目概览
 
 QriaFiction 是一个基于 Python 的互动小说引擎，包含：
+
 1. 自定义脚本语言 **QFScript**（聊天风格互动小说语言）
 2. 完整的解释器实现（Lexer → Parser → Interpreter）
 3. AI 意图识别引擎（支持 OpenAI/DeepSeek/自定义/关键词匹配）
@@ -56,7 +58,7 @@ QriaFiction/
 
 ### 核心语法速查
 
-```qfscript
+````qfscript
 # 角色定义
 define yuki = character(name="雪", avatar="", color="#87ceeb")
 
@@ -75,55 +77,85 @@ set relationship += 10
 # 玩家输入
 input name "请输入名字："
 
-# 标签与跳转
+### 标签与跳转
+
+```qfscript
+# main.qf 中的标签（不加命名空间前缀）
 label start:
     yuki "你好！"
-    jump next_scene
+    jump ch1_prologue.begin  # 跳转到 ch1_prologue.qf
 end
 
-jump scene_a if flag == true
+# ch1_prologue.qf
+label begin:
+    yuki "欢迎来到序章..."
+    jump daily_events.greeting
+end
+
+# daily_events.qf
+label greeting:
+    yuki "早上好！"
+    return
+end
+
+# 条件跳转
+jump scene_a if flag_a == true
 jump scene_b otherwise
-call sub_routine
+
+# 调用（会返回）
+call event_daily
+call intro if day == 1
+
+# 返回
 return
+````
+
+**多脚本跳转规则：** 引擎自动扫描 `script/` 目录下所有 `.qf` 文件，文件名自动成为标签命名空间。格式为 `文件名.标签名`（不含 .qf）。`main.qf` 中的标签无前缀。
 
 # 条件
+
 if relationship >= 50:
-    yuki "我们是很好的朋友！"
+yuki "我们是很好的朋友！"
 elseif relationship >= 30:
-    yuki "我们还算熟络..."
+yuki "我们还算熟络..."
 else:
-    yuki "我们还不熟..."
+yuki "我们还不熟..."
 end
 
 # 循环
+
 var i = 0
 while i < 3:
-    "次数：{i}"
-    set i += 1
+"次数：{i}"
+set i += 1
 end
 
 # 互动模式（AI 意图识别）
+
 interact:
-    "打招呼" -> greet (desc="向她问候、说你好")
-    "离开" -> leave (desc="告别并离开")
-    fallback "雪歪了歪头，似乎没理解你的意思。"
+"打招呼" -> greet (desc="向她问候、说你好")
+"离开" -> leave (desc="告别并离开")
+fallback "雪歪了歪头，似乎没理解你的意思。"
 end
 
 # 嵌入 Python
+
 python:
-    import random
-    qf.set("dice_roll", random.randint(1, 6))
-    if qf.get("hp") <= 0:
-        qf.jump("defeat")
+import random
+qf.set("dice_roll", random.randint(1, 6))
+if qf.get("hp") <= 0:
+qf.jump("defeat")
 end
 
 # 等待/系统
+
 wait 1.5
 wait click
 save
 load
 quit
-```
+
+````
 
 ### 完整语法 BNF
 
@@ -142,16 +174,16 @@ qf.save()                   # 保存
 qf.load()                   # 加载
 qf.user_input               # 用户最后输入的内容
 qf.matched_action           # 当前匹配到的动作名
-```
+````
 
 ### 内置变量
 
-| 变量 | 说明 |
-|------|------|
-| `_user_input` | 用户最后输入的内容 |
+| 变量              | 说明               |
+| ----------------- | ------------------ |
+| `_user_input`     | 用户最后输入的内容 |
 | `_matched_action` | 当前匹配到的动作名 |
-| `_label` | 当前标签名 |
-| `_playtime` | 游戏运行时间（秒） |
+| `_label`          | 当前标签名         |
+| `_playtime`       | 游戏运行时间（秒） |
 
 ## 架构知识
 
@@ -166,7 +198,11 @@ qf.matched_action           # 当前匹配到的动作名
 ```
 启动游戏
   ↓
-加载脚本 → 词法分析 → 语法分析 → 收集标签
+扫描 script/ 目录所有 .qf 文件
+  ↓
+加载主脚本 → 词法分析 → 语法分析 → 收集标签
+  ↓
+按需加载其他脚本（jump/call 时）
   ↓
 执行程序（在独立线程中）
   ↓
@@ -179,35 +215,35 @@ qf.matched_action           # 当前匹配到的动作名
 
 ### 关键类说明
 
-| 类 | 文件 | 职责 |
-|----|------|------|
-| `Lexer` | `core/lexer.py` | 词法分析，处理缩进、字符串转义、注释、python: 块 |
-| `Parser` | `core/parser.py` | 递归下降解析，Token → AST |
-| `Interpreter` | `core/interpreter.py` | 解释执行 AST |
-| `Runtime` | `core/runtime.py` | 运行时状态管理 |
-| `GameRunner` | `app/api.py` | 游戏运行器（实际 UI 版本） |
-| `QriaContext` | `core/interpreter.py` | Python 嵌入的上下文 API |
-| `AIEngine` | `core/ai_engine.py` | AI 意图识别 |
+| 类            | 文件                  | 职责                                             |
+| ------------- | --------------------- | ------------------------------------------------ |
+| `Lexer`       | `core/lexer.py`       | 词法分析，处理缩进、字符串转义、注释、python: 块 |
+| `Parser`      | `core/parser.py`      | 递归下降解析，Token → AST                        |
+| `Interpreter` | `core/interpreter.py` | 解释执行 AST                                     |
+| `Runtime`     | `core/runtime.py`     | 运行时状态管理                                   |
+| `GameRunner`  | `app/api.py`          | 游戏运行器（实际 UI 版本）                       |
+| `QriaContext` | `core/interpreter.py` | Python 嵌入的上下文 API                          |
+| `AIEngine`    | `core/ai_engine.py`   | AI 意图识别                                      |
 
 ### 当前已实现 vs 未实现
 
-| 功能 | 状态 |
-|------|------|
-| 词法分析 | ✅ 完整 |
-| 语法分析 | ✅ 完整 |
-| 解释执行 | ✅ 完整 |
-| 角色/对话/背景 | ✅ 完整 |
-| 标签/跳转/调用 | ✅ 完整 |
-| 变量/条件/循环 | ✅ 完整 |
-| Python 嵌入 | ✅ 完整 |
-| 互动模式（fuzzywuzzy） | ✅ 完整 |
-| AI 匹配（OpenAI/DeepSeek） | ✅ 代码存在，需安装 openai 包 |
-| 字符串插值 `{var}` | ✅ 完整 |
-| 字符串插值 `{python: expr}` | ⚠️ 部分实现 |
-| `include` 语句 | 🔲 空操作 |
-| `save`/`load` | 🔲 仅标记，未实际持久化 |
-| `wait click` | ⚠️ 部分实现 |
-| 资源文件加载 | 🔲 未实现 |
+| 功能                        | 状态                          |
+| --------------------------- | ----------------------------- |
+| 词法分析                    | ✅ 完整                       |
+| 语法分析                    | ✅ 完整                       |
+| 解释执行                    | ✅ 完整                       |
+| 角色/对话/背景              | ✅ 完整                       |
+| 标签/跳转/调用              | ✅ 完整                       |
+| 变量/条件/循环              | ✅ 完整                       |
+| Python 嵌入                 | ✅ 完整                       |
+| 互动模式（fuzzywuzzy）      | ✅ 完整                       |
+| AI 匹配（OpenAI/DeepSeek）  | ✅ 代码存在，需安装 openai 包 |
+| 字符串插值 `{var}`          | ✅ 完整                       |
+| 字符串插值 `{python: expr}` | ⚠️ 部分实现                   |
+| 多脚本自动加载              | ✅ 完整实现                   |
+| `save`/`load`               | 🔲 仅标记，未实际持久化       |
+| `wait click`                | ⚠️ 部分实现                   |
+| 资源文件加载                | 🔲 未实现                     |
 
 ## 编码约定
 

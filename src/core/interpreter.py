@@ -57,18 +57,83 @@ class Interpreter:
         self.script_dir = script_dir
         self._source_cache: dict[str, list[str]] = {}
         self._python_scope: dict = {"qf": None}
+        self._script_registry: dict[str, Path] = {}
+        self._loaded_scripts: set[str] = set()
+        self._main_program: Program = None
+        self._main_filename: str = "main.qf"
+
+    def scan_scripts(self):
+        if self.script_dir and self.script_dir.exists():
+            for qf_file in self.script_dir.glob("*.qf"):
+                script_name = qf_file.stem
+                self._script_registry[script_name] = qf_file
 
     def run(self, program: Program):
-        self._collect_labels(program)
+        self._main_program = program
+        self.scan_scripts()
+        self._load_all_scripts()
+        self._execute_top_level_statements(program, namespace=None)
         if "start" in self.labels:
             self._execute_block(self.labels["start"])
         else:
             self._execute_block(program.statements)
 
-    def _collect_labels(self, program: Program):
+    def _load_all_scripts(self):
+        if self._main_program:
+            self._collect_labels(self._main_program, namespace=None)
+        self._loaded_scripts.add("main")
+        for script_name, script_path in self._script_registry.items():
+            if script_name not in self._loaded_scripts:
+                self._load_script(script_name, script_path)
+
+    def _load_script(self, script_name: str, script_path: Path):
+        if script_name in self._loaded_scripts:
+            return
+        if not script_path.exists():
+            return
+        try:
+            from core.lexer import Lexer
+            from core.parser import Parser
+            src = script_path.read_text(encoding="utf-8")
+            self._source_cache[str(script_path)] = src.split("\n")
+            lexer = Lexer(src, str(script_path))
+            tokens = lexer.tokenize()
+            parser = Parser(tokens, str(script_path))
+            program = parser.parse()
+            namespace = script_name
+            self._collect_labels(program, namespace=namespace)
+            self._execute_top_level_statements(program, namespace)
+            self._loaded_scripts.add(script_name)
+        except Exception as e:
+            pass
+
+    def _load_script_on_demand(self, script_name: str):
+        if script_name in self._loaded_scripts:
+            return True
+        if script_name not in self._script_registry:
+            return False
+        script_path = self._script_registry[script_name]
+        self._load_script(script_name, script_path)
+        return script_name in self._loaded_scripts
+
+    def _execute_top_level_statements(self, program: Program, namespace: str):
         for stmt in program.statements:
             if isinstance(stmt, LabelStmt):
-                self.labels[stmt.name] = stmt.body
+                continue
+            self._execute(stmt)
+            if self.runtime.pending_jump or self.runtime.pending_dialogues or self.runtime.pending_input:
+                return
+            if self.runtime.pending_save or self.runtime.pending_load or self.runtime.pending_quit:
+                return
+
+    def _collect_labels(self, program: Program, namespace: str = None):
+        for stmt in program.statements:
+            if isinstance(stmt, LabelStmt):
+                if namespace:
+                    label_name = f"{namespace}.{stmt.name}"
+                else:
+                    label_name = stmt.name
+                self.labels[label_name] = stmt.body
 
     def _execute_block(self, statements: list):
         i = 0
@@ -216,34 +281,48 @@ class Interpreter:
         elif isinstance(stmt, PythonBlockStmt):
             self._execute_python(stmt.code)
 
-        elif isinstance(stmt, IncludeStmt):
-            self._execute_include(stmt.path)
+        elif isinstance(stmt, PlayMusicStmt):
+            self.runtime.pending_audio = {
+                "type": "play_music",
+                "path": stmt.path,
+                "loop": stmt.loop,
+                "volume": stmt.volume,
+                "fade_in": stmt.fade_in,
+            }
 
-    def _execute_include(self, path: str):
-        if self.script_dir:
-            target = self.script_dir / path
-        else:
-            target = Path(path)
+        elif isinstance(stmt, PlaySoundStmt):
+            self.runtime.pending_audio = {
+                "type": "play_sound",
+                "path": stmt.path,
+                "volume": stmt.volume,
+            }
 
-        if not target.exists():
-            raise QFRuntimeError(f"无法加载脚本文件: {path}")
+        elif isinstance(stmt, StopMusicStmt):
+            self.runtime.pending_audio = {
+                "type": "stop_music",
+                "fade_out": stmt.fade_out,
+            }
 
-        from core.lexer import Lexer
-        from core.parser import Parser
+        elif isinstance(stmt, StopSoundStmt):
+            self.runtime.pending_audio = {
+                "type": "stop_sound",
+            }
 
-        src = target.read_text(encoding="utf-8")
-        self._source_cache[str(target)] = src.split("\n")
-        lexer = Lexer(src, str(target))
-        tokens = lexer.tokenize()
-        parser = Parser(tokens, str(target))
-        included_program = parser.parse()
-
-        self._collect_labels(included_program)
-        for stmt in included_program.statements:
-            if not isinstance(stmt, LabelStmt):
-                self._execute(stmt)
-                if self.runtime.pending_jump or self.runtime.pending_dialogues or self.runtime.pending_input or self.runtime.pending_save or self.runtime.pending_load:
-                    return
+        elif isinstance(stmt, SetVolumeStmt):
+            if stmt.music_volume >= 0:
+                self.runtime.music_volume = stmt.music_volume
+                self.runtime.pending_audio = {
+                    "type": "set_volume",
+                    "music_volume": stmt.music_volume,
+                    "sound_volume": self.runtime.sound_volume,
+                }
+            if stmt.sound_volume >= 0:
+                self.runtime.sound_volume = stmt.sound_volume
+                self.runtime.pending_audio = {
+                    "type": "set_volume",
+                    "music_volume": self.runtime.music_volume,
+                    "sound_volume": stmt.sound_volume,
+                }
 
     def _execute_python(self, code: str):
         if self._python_scope.get("qf") is None:

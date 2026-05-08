@@ -9,6 +9,7 @@ from core.lexer import Lexer
 from core.parser import Parser
 from core.interpreter import Interpreter
 from core.runtime import Runtime, Character
+from core.ast import Program
 from core.text_utils import interpolate_text_with_logging
 
 
@@ -31,14 +32,12 @@ class GameRunner:
         self.user_input_event = threading.Event()
         self.user_input_value = ""
         self.continue_event = threading.Event()
+        self._bg_loaded_event = threading.Event()
         self._python_scope = {}
         self._running = False
         self._lock = threading.Lock()
         self._script_dir = None
         self._save_dir = None
-        self._current_stmt_index = 0
-        self._call_stack = []
-        self._last_include_stmt = None
 
     def is_running(self):
         return self._running
@@ -83,7 +82,12 @@ class GameRunner:
     def _ui_call(self, method, *args):
         if self.window:
             js_args = ", ".join(json.dumps(a, ensure_ascii=False) for a in args)
-            self.window.evaluate_js(f"{method}({js_args})")
+            js_code = f"{method}({js_args})"
+            _log("D", "js", js_code[:200])
+            try:
+                self.window.evaluate_js(js_code)
+            except Exception as e:
+                _log("E", "js", f"failed: {e}")
 
     def _interpolate_text(self, text: str) -> str:
         qf_ctx = self.interp.qf_ctx if self.interp else None
@@ -94,6 +98,19 @@ class GameRunner:
             qf_ctx=qf_ctx,
             log_func=_log,
         )
+
+    def _resolve_bg_path(self, path: str) -> str:
+        if not path:
+            return ""
+        if self._script_dir:
+            target = (self._script_dir.parent / "assets" / "bg" / path).resolve()
+        else:
+            target = (Path("assets/bg") / path).resolve()
+        _log("I", "bg", f"resolve: input={path}, target={target}, exists={target.exists()}")
+        if not target.exists():
+            _log("W", "bg", f"not found: {target}")
+            return ""
+        return str(target)
 
     def _resolve_resource_path(self, path: str, as_data_url: bool = False) -> str:
         if not path:
@@ -149,11 +166,54 @@ class GameRunner:
         _log("I", "input", f"got={val}")
         return val
 
+    def _scan_scripts(self):
+        """Scan all .qf files in script directory for auto-loading."""
+        if not self._script_dir or not self._script_dir.exists():
+            return
+        self._script_files = {}
+        for qf_file in self._script_dir.glob("*.qf"):
+            script_name = qf_file.stem
+            self._script_files[script_name] = qf_file
+        _log("I", "scan", f"found scripts: {list(self._script_files.keys())}")
+
+    def _load_script_file(self, script_name: str, namespace: str = None):
+        """Load a single script file and collect its labels."""
+        if script_name in self._loaded_script_names:
+            return
+        script_path = self._script_files.get(script_name)
+        if not script_path or not script_path.exists():
+            return
+        try:
+            _log("I", "load_script", f"loading {script_path}")
+            src = script_path.read_text(encoding="utf-8")
+            lexer = Lexer(src, str(script_path))
+            tokens = lexer.tokenize()
+            parser = Parser(tokens, str(script_path))
+            program = parser.parse()
+            self._collect_labels_with_ns(program, namespace)
+            self._loaded_script_names.add(script_name)
+        except Exception as e:
+            _log("E", "load_script", f"failed to load {script_name}: {e}")
+
+    def _collect_labels_with_ns(self, program: Program, namespace: str = None):
+        """Collect labels from a program with optional namespace prefix."""
+        import core.ast as ast_mod
+        for stmt in program.statements:
+            if isinstance(stmt, ast_mod.LabelStmt):
+                if namespace:
+                    label_name = f"{namespace}.{stmt.name}"
+                else:
+                    label_name = stmt.name
+                if label_name not in self.interp.labels:
+                    self.interp.labels[label_name] = stmt.body
+
     def start_game(self, script_path: str, ai_provider: str):
         _log("I", "start", f"path={script_path} provider={ai_provider}")
         self._running = True
         self.reset()
         self.load_script(script_path)
+        self._scan_scripts()
+        self._loaded_script_names = set()
         self.runtime.running = True
         ai_config = {"provider": ai_provider}
         models = config_store.get_ai_models()
@@ -167,9 +227,19 @@ class GameRunner:
         self.interp = Interpreter(runtime=self.runtime, ai_config=ai_config, script_dir=self._script_dir)
         self.interp._collect_labels(self.program)
         self._python_scope["qf"] = self.interp.qf_ctx
+        self._load_all_scripts()
         self._run_program()
         _log("I", "start", "finished")
         self._running = False
+
+    def _load_all_scripts(self):
+        """Load all script files in the script directory."""
+        self._loaded_script_names.add("main")
+        for script_name in self._script_files:
+            if script_name == "main":
+                continue
+            namespace = script_name
+            self._load_script_file(script_name, namespace)
 
     def _run_program(self):
         non_label_stmts = []
@@ -258,8 +328,16 @@ class GameRunner:
         self.interp._execute(stmt)
 
         if isinstance(stmt, ast_mod.BgStmt):
-            resolved = self._resolve_resource_path(stmt.path, as_data_url=True) if stmt.path else ""
-            self._ui_call("setBackground", resolved)
+            if stmt.path:
+                resolved = self._resolve_bg_path(stmt.path)
+                if resolved:
+                    self._bg_loaded_event.clear()
+                    self._ui_call("loadBackground", resolved)
+                    self._bg_loaded_event.wait(timeout=5.0)
+                else:
+                    _log("W", "bg", f"path resolved to empty for: {stmt.path}")
+            else:
+                self._ui_call("setBackground", "")
 
         elif isinstance(stmt, ast_mod.DialogueStmt):
             self._show_dialogue(stmt.character, stmt.text)
@@ -302,43 +380,41 @@ class GameRunner:
         elif isinstance(stmt, ast_mod.QuitStmt):
             pass
 
-        elif isinstance(stmt, ast_mod.IncludeStmt):
-            self._last_include_stmt = stmt
-            self._exec_include()
+        elif isinstance(stmt, ast_mod.PlayMusicStmt):
+            self._handle_audio()
+
+        elif isinstance(stmt, ast_mod.PlaySoundStmt):
+            self._handle_audio()
+
+        elif isinstance(stmt, ast_mod.StopMusicStmt):
+            self._handle_audio()
+
+        elif isinstance(stmt, ast_mod.StopSoundStmt):
+            self._handle_audio()
+
+        elif isinstance(stmt, ast_mod.SetVolumeStmt):
+            self._handle_audio()
 
         # IfStmt/WhileStmt/BreakStmt/ContinueStmt/VarStmt/SetStmt/PythonBlockStmt:
         # handled entirely by Interpreter._execute(), no GameRunner callback needed
 
-    def _exec_include(self):
-        import core.ast as ast_mod
-        stmt = self._last_include_stmt
-        if not stmt:
+    def _handle_audio(self):
+        audio = self.runtime.pending_audio
+        if not audio:
             return
-
-        if self._script_dir:
-            target = self._script_dir / stmt.path
-        else:
-            target = Path(stmt.path)
-
-        if not target.exists():
-            self._show_dialogue(None, f"[错误] 无法加载脚本: {stmt.path}")
-            return
-
-        _log("I", "include", f"loading {target}")
-        src = target.read_text(encoding="utf-8")
-        lexer = Lexer(src, str(target))
-        tokens = lexer.tokenize()
-        parser = Parser(tokens, str(target))
-        included_program = parser.parse()
-
-        for s in included_program.statements:
-            if isinstance(s, ast_mod.LabelStmt):
-                if s.name not in self.interp.labels:
-                    self.interp.labels[s.name] = s.body
-            else:
-                self._exec_stmt(s)
-                if not self.runtime.running:
-                    return
+        self.runtime.pending_audio = None
+        if audio["type"] == "play_music":
+            path = self._resolve_resource_path(audio["path"], as_data_url=False) if audio["path"] else ""
+            self._ui_call("playMusic", path, audio.get("volume", 1.0), audio.get("loop", True), audio.get("fade_in", 0.0))
+        elif audio["type"] == "play_sound":
+            path = self._resolve_resource_path(audio["path"], as_data_url=False) if audio["path"] else ""
+            self._ui_call("playSound", path, audio.get("volume", 1.0))
+        elif audio["type"] == "stop_music":
+            self._ui_call("stopMusic", audio.get("fade_out", 0.0))
+        elif audio["type"] == "stop_sound":
+            self._ui_call("stopSound")
+        elif audio["type"] == "set_volume":
+            self._ui_call("setVolume", audio.get("music_volume", -1.0), audio.get("sound_volume", -1.0))
 
     def _exec_interact(self, actions, fallbacks):
         _log("I", "interact", [a.name for a in actions])
@@ -628,6 +704,29 @@ class LauncherApi:
     @api_method
     def on_action_matched(self, result):
         return True
+
+    @api_method
+    def bg_image_loaded(self):
+        game_runner._bg_loaded_event.set()
+        return True
+
+    @api_method
+    def get_bg_image(self, abs_path: str):
+        if not abs_path:
+            return {"data": ""}
+        target = Path(abs_path)
+        if not target.exists():
+            return {"data": ""}
+        try:
+            import base64
+            ext = target.suffix.lower()
+            mime_map = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp"}
+            mime = mime_map.get(ext, "image/png")
+            data = base64.b64encode(target.read_bytes()).decode()
+            return {"data": f"data:{mime};base64,{data}"}
+        except Exception as e:
+            _log("E", "bg_api", f"encode failed: {e}")
+            return {"data": ""}
 
     @api_method
     def get_save_slots(self):
