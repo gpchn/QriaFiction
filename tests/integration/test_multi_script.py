@@ -2,7 +2,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "src"))
 
 from core.lexer import Lexer
 from core.parser import Parser
@@ -11,6 +11,7 @@ from core.runtime import Runtime
 
 
 def run_with_scripts(main_src: str, scripts: dict):
+    """Helper to run multi-script tests."""
     with tempfile.TemporaryDirectory() as tmpdir:
         script_dir = Path(tmpdir)
         main_path = script_dir / "main.qf"
@@ -26,7 +27,9 @@ def run_with_scripts(main_src: str, scripts: dict):
         return interp
 
 
-class TestMultiScript:
+class TestSingleScript:
+    """测试单脚本"""
+
     def test_single_script_with_start(self):
         """Test that a single main script works."""
         src = '''
@@ -37,6 +40,10 @@ end
 '''
         interp = run_with_scripts(src, {})
         assert interp.runtime.get("x") == 42
+
+
+class TestTwoScripts:
+    """测试两个脚本"""
 
     def test_two_scripts_with_jump(self):
         """Test jumping between two scripts."""
@@ -56,6 +63,10 @@ end
         assert interp.runtime.get("visited_ch1") == True
         assert "ch1.begin" in interp.labels
         assert "yuki" in interp.runtime.characters
+
+
+class TestThreeScriptsChain:
+    """测试三个脚本链"""
 
     def test_three_scripts_chain(self):
         """Test jumping through three scripts."""
@@ -83,6 +94,10 @@ end
         })
         assert interp.runtime.get("step") == 3
 
+
+class TestCallAndReturn:
+    """测试调用和返回"""
+
     def test_call_and_return_between_scripts(self):
         """Test calling and returning between scripts."""
         main_src = '''
@@ -104,6 +119,10 @@ end
         interp = run_with_scripts(main_src, {"ch1.qf": ch1_src})
         assert interp.runtime.get("called") == True
         assert interp.runtime.get("returned") == True
+
+
+class TestLabelNamespace:
+    """测试标签命名空间"""
 
     def test_label_namespace_no_collision(self):
         """Test that labels from different scripts don't collide."""
@@ -163,6 +182,10 @@ end
         assert "events.greeting" in interp.labels
         assert "greeting" not in interp.labels
 
+
+class TestCharacterDefinition:
+    """测试角色定义"""
+
     def test_define_character_in_separate_script(self):
         """Test defining characters in a separate script."""
         main_src = '''
@@ -181,6 +204,10 @@ end
 '''
         interp = run_with_scripts(main_src, {"chars.qf": chars_src})
         assert "yuki" in interp.runtime.characters
+
+
+class TestLabelRegistry:
+    """测试标签注册"""
 
     def test_label_registry_contains_all_scripts(self):
         """Test that all script labels are registered."""

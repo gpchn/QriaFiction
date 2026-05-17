@@ -89,6 +89,19 @@ class InteractStmt(Stmt):
 
 
 @dataclass
+class OptionItem:
+    text: str = ""
+    label: str = ""
+    desc: str = ""
+    condition: Expr = None
+
+
+@dataclass
+class OptionsStmt(Stmt):
+    items: list = field(default_factory=list)
+
+
+@dataclass
 class DialogueStmt(Stmt):
     character: str | None = None
     text: str = ""

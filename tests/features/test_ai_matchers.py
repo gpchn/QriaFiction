@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "src"))
 
 from core.ai_matchers import (
     OpenAIMatcher, DeepSeekMatcher, CustomMatcher,
@@ -10,6 +10,8 @@ from core.ai_matchers import (
 
 
 class TestMatchers:
+    """测试AI匹配器"""
+
     def test_parse_exact(self):
         matcher = OpenAIMatcher()
         matcher._last_actions = [type('A', (), {'name': 'greet'})()]

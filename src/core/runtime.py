@@ -26,6 +26,7 @@ class Runtime:
         self.background: str | None = None
         self.current_label: str = ""
         self.call_stack: list = []
+        self.statement_index: int = 0
         self._user_input: str = ""
         self._matched_action: str = ""
         self._start_time = time.time()
@@ -34,6 +35,7 @@ class Runtime:
         self.pending_dialogues: list = []
         self.pending_input: dict | None = None
         self.pending_interact: dict | None = None
+        self.pending_options: dict | None = None
         self.pending_save = False
         self.pending_load = False
         self.pending_quit = False
@@ -83,10 +85,14 @@ class Runtime:
     def queue_interact(self, actions: list, fallbacks: list):
         self.pending_interact = {"actions": actions, "fallbacks": fallbacks}
 
+    def queue_options(self, items: list):
+        self.pending_options = {"items": items}
+
     def clear_pending_dialogues(self):
         self.pending_dialogues = []
         self.pending_input = None
         self.pending_interact = None
+        self.pending_options = None
 
     def set_jump(self, label: str):
         self.pending_jump = label

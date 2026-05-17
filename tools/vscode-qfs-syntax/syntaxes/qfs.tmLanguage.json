@@ -1,0 +1,151 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "QriaFiction Script",
+  "scopeName": "source.qfs",
+  "patterns": [
+    {
+      "include": "#python-block"
+    },
+    {
+      "include": "#string-double"
+    },
+    {
+      "include": "#string-single"
+    },
+    {
+      "include": "#comment"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#built-in-variables"
+    },
+    {
+      "include": "#variables"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "include": "#numeric"
+    },
+    {
+      "include": "#boolean"
+    }
+  ],
+  "repository": {
+    "comment": {
+      "name": "comment.line.hash.qfs",
+      "begin": "(?<!\")\\s*(#)|^\\s*(#)",
+      "end": "$",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.comment.qfs" },
+        "2": { "name": "punctuation.definition.comment.qfs" }
+      }
+    },
+    "python-block": {
+      "begin": "^(\\s*)(python):\\s*$",
+      "end": "^(\\s*)(end)\\s*$",
+      "beginCaptures": {
+        "2": { "name": "keyword.control.python.qfs" }
+      },
+      "endCaptures": {
+        "2": { "name": "keyword.control.end.qfs" }
+      },
+      "contentName": "source.python.embedded.qfs",
+      "patterns": [
+        {
+          "include": "source.python"
+        }
+      ]
+    },
+    "keywords": {
+      "match": "\\b(define|character|bg|none|interact|fallback|options|desc|condition|label|jump|call|return|var|set|input|if|elseif|else|while|break|continue|wait|click|save|load|quit|python|end|with|at|otherwise|music|sound|volume|fade|stop|loop|and|or|not)\\b",
+      "name": "keyword.control.qfs"
+    },
+    "built-in-variables": {
+      "match": "\\b(_user_input|_matched_action|_label|_playtime)\\b",
+      "name": "variable.language.builtin.qfs"
+    },
+    "variables": {
+      "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\b",
+      "name": "variable.other.qfs"
+    },
+    "operators": {
+      "match": "(==|!=|<=|>=|//|\\*\\*|\\+=|-=|\\*=|/=|->|\\+|-|\\*|/|%|<|>|=)",
+      "name": "keyword.operator.qfs"
+    },
+    "string-double": {
+      "name": "string.quoted.double.qfs",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "match": "\\\\.",
+          "name": "constant.character.escape.qfs"
+        },
+        {
+          "include": "#interpolation"
+        }
+      ]
+    },
+    "string-single": {
+      "name": "string.quoted.single.qfs",
+      "begin": "'",
+      "end": "'",
+      "patterns": [
+        {
+          "match": "\\\\.",
+          "name": "constant.character.escape.qfs"
+        },
+        {
+          "include": "#interpolation"
+        }
+      ]
+    },
+    "interpolation": {
+      "name": "meta.interpolation.qfs",
+      "begin": "\\{(\\s*)(python:\\s*)?",
+      "end": "(\\}|(?=[\"']))",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.interpolation.begin.qfs" },
+        "2": { "name": "keyword.other.python-prefix.qfs" }
+      },
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.interpolation.end.qfs" }
+      },
+      "contentName": "source.python.embedded.qfs",
+      "patterns": [
+        {
+          "match": "\\b(and|or|not|true|false|None)\\b",
+          "name": "keyword.operator.python.qfs"
+        },
+        {
+          "match": "\\b([a-zA-Z_]\\w*)\\b",
+          "name": "variable.other.python.qfs"
+        },
+        {
+          "match": "\\b\\d+(\\.\\d+)?\\b",
+          "name": "constant.numeric.python.qfs"
+        },
+        {
+          "match": "\"[^\"]*\"",
+          "name": "string.quoted.double.python.qfs"
+        },
+        {
+          "match": "'[^']*'",
+          "name": "string.quoted.single.python.qfs"
+        }
+      ]
+    },
+    "numeric": {
+      "match": "\\b\\d+(\\.\\d+)?\\b",
+      "name": "constant.numeric.qfs"
+    },
+    "boolean": {
+      "match": "\\b(true|false)\\b",
+      "name": "constant.language.boolean.qfs"
+    }
+  }
+}

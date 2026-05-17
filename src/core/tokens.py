@@ -14,6 +14,7 @@ class TokenType(Enum):
     NONE = auto()
     INTERACT = auto()
     FALLBACK = auto()
+    OPTIONS = auto()
     DESC = auto()
     CONDITION = auto()
     LABEL = auto()
@@ -90,6 +91,7 @@ KEYWORDS = {
     "none": TokenType.NONE,
     "interact": TokenType.INTERACT,
     "fallback": TokenType.FALLBACK,
+    "options": TokenType.OPTIONS,
     "desc": TokenType.DESC,
     "condition": TokenType.CONDITION,
     "label": TokenType.LABEL,

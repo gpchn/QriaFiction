@@ -1,0 +1,36 @@
+# QriaFiction 多脚本测试文件
+# 此文件由 main.qf 通过 jump chapter_test.begin 调用
+
+label begin:
+    bg "1.jpg"
+    narrator ""
+    narrator "=== 多脚本跳转测试 ==="
+    narrator ""
+    narrator "你已跳转到 chapter_test.qf 的 begin 标签。"
+    narrator "（说明多脚本自动加载功能正常）"
+
+    narrator ""
+    narrator "--- 测试 1：Call/Return 跨脚本 ---"
+    narrator "即将调用 main.qf 中的子程序..."
+
+    call test_subroutine
+
+    narrator "从 main.qf 的子程序返回！跨脚本 Call/Return 正常。"
+
+    narrator ""
+    narrator "--- 测试 2：在本脚本中跳转 ---"
+    narrator "跳转到 chapter_test.test_continue..."
+
+    jump test_continue
+end
+
+label test_continue:
+    narrator ""
+    narrator "跳转到 chapter_test.test_continue 成功！"
+
+    narrator ""
+    narrator "--- 测试 3：返回 main.qf ---"
+    narrator "即将返回 main.qf 的 after_chapter 标签..."
+
+    jump main.after_chapter
+end

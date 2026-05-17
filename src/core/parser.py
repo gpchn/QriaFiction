@@ -57,6 +57,8 @@ class Parser:
             return self._parse_bg()
         elif tok.type == TokenType.INTERACT:
             return self._parse_interact()
+        elif tok.type == TokenType.OPTIONS:
+            return self._parse_options()
         elif tok.type == TokenType.LABEL:
             return self._parse_label()
         elif tok.type == TokenType.JUMP:
@@ -266,6 +268,56 @@ class Parser:
         if not stmt.fallbacks:
             raise QFSyntaxError("interact 块中至少需要一条 fallback", end_tok.line, end_tok.col, self.filename)
         return stmt
+
+    def _parse_options(self) -> OptionsStmt:
+        self._expect(TokenType.OPTIONS)
+        self._expect(TokenType.COLON)
+        self._consume_block_tokens()
+
+        stmt = OptionsStmt()
+        while self._peek().type != TokenType.END:
+            self._consume_block_tokens()
+            if self._peek().type == TokenType.END:
+                break
+            if self._peek().type == TokenType.STRING:
+                item = self._parse_option_item()
+                stmt.items.append(item)
+            else:
+                raise QFSyntaxError(f"options 块中期望选项", self._peek().line, self._peek().col, self.filename)
+
+        self._expect(TokenType.END)
+        if not stmt.items:
+            raise QFSyntaxError("options 块中至少需要一个选项", self._peek().line, self._peek().col, self.filename)
+        return stmt
+
+    def _parse_option_item(self) -> OptionItem:
+        text_tok = self._expect(TokenType.STRING)
+        self._expect(TokenType.ARROW)
+        label_tok = self._expect(TokenType.IDENTIFIER)
+        self._expect(TokenType.LPAREN)
+
+        desc = ""
+        condition = None
+
+        while True:
+            if self._peek().type == TokenType.RPAREN:
+                break
+            key = self._parse_param_key()
+            self._expect(TokenType.ASSIGN)
+            if key == "desc":
+                val = self._expect(TokenType.STRING)
+                desc = val.value
+            elif key == "condition":
+                condition = self._parse_expression()
+            self._match(TokenType.COMMA)
+
+        self._expect(TokenType.RPAREN)
+        return OptionItem(
+            text=text_tok.value,
+            label=label_tok.value,
+            desc=desc,
+            condition=condition,
+        )
 
     def _parse_param_key(self) -> str:
         tok = self._peek()

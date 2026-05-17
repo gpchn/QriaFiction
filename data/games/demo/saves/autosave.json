@@ -1,23 +1,36 @@
 {
   "version": 1,
-  "timestamp": 1778224992.347701,
-  "playtime": 38.50751352310181,
+  "timestamp": 1779030903.0750623,
+  "playtime": 25.004494667053223,
   "variables": {
     "player_name": "123",
-    "relationship": 35,
+    "gold": 300,
+    "relationship": 60,
     "has_key": true,
-    "gold": 60.0,
     "day": 1,
+    "test_passed": 11,
     "i": 0,
-    "dice_roll": 2,
-    "bonus_points": 20
+    "dice": 6,
+    "sqrt_val": 12
   },
-  "background": null,
-  "current_label": "demo_system",
+  "background": "1.jpg",
+  "current_label": "after_chapter",
   "call_stack": [
-    "demo_call_return"
+    [
+      "after_interact",
+      0
+    ],
+    [
+      "chapter_test.begin",
+      0
+    ]
   ],
   "characters": {
+    "narrator": {
+      "name": "",
+      "avatar": "",
+      "color": "#888888"
+    },
     "yuki": {
       "name": "雪",
       "avatar": "",
@@ -27,11 +40,6 @@
       "name": "春",
       "avatar": "",
       "color": "#ffb6c1"
-    },
-    "narrator": {
-      "name": "",
-      "avatar": "",
-      "color": "#888888"
     }
   },
   "music_volume": 1.0,

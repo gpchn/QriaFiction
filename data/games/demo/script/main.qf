@@ -1,262 +1,247 @@
-# QriaFiction 完整语法演示脚本
+# QriaFiction 全功能测试脚本（主入口）
+# 用于验证所有语言功能是否正常工作
 
-# ==================== 1. 角色定义 ====================
+# ==================== 角色定义 ====================
+define narrator = character(name="", avatar="", color="#888888")
 define yuki = character(name="雪", avatar="", color="#87ceeb")
 define haru = character(name="春", avatar="", color="#ffb6c1")
-define narrator = character(name="", avatar="", color="#888888")
 
-# ==================== 2. 变量声明 ====================
+# ==================== 变量声明 ====================
 var player_name = "勇者"
+var gold = 100
 var relationship = 0
 var has_key = false
-var gold = 100
 var day = 1
+var test_passed = 0
 
-# ==================== 3. 主流程开始 ====================
+# ==================== 主入口 ====================
 label start:
-    narrator "欢迎来到 QriaFiction 语法演示！"
-    narrator "这是一个用于测试所有语言特性的演示脚本。"
+    bg "1.jpg"
+    narrator "━━━━━━━━━━━━━━━━━━━━"
+    narrator "QriaFiction 全功能测试"
+    narrator "━━━━━━━━━━━━━━━━━━━━"
+    narrator ""
+    narrator "本脚本将依次测试所有语言功能。"
+    narrator "请按照提示进行操作，确认每项功能正常。"
 
-    # 字符串插值测试
-    narrator "你的名字是：{player_name}"
-    narrator "今天是第 {day} 天"
-
-    # 玩家输入
-    input player_name "请输入你的名字："
-    narrator "你好，{player_name}！"
-
-    jump demo_dialogue
-end
-
-# ==================== 4. 对话演示 ====================
-label demo_dialogue:
-    narrator "=== 对话演示 ==="
+    narrator ""
+    narrator "--- 1. 角色与对话 ---"
+    narrator ""
+    narrator "下方应显示角色名称和对话："
 
     yuki "你好！我是雪！"
     haru "我是春，很高兴认识你！"
 
-    "这是一段没有角色署名的旁白文字。"
+    "（上面应显示两条不同角色的对话）"
 
-    narrator "旁白可以使用 narrator 角色来标识。"
+    narrator ""
+    narrator "--- 2. 字符串插值 ---"
 
-    jump demo_bg
-end
+    narrator "你的名字是：{player_name}，今天是第 {day} 天"
 
-# ==================== 5. 背景演示 ====================
-label demo_bg:
-    narrator "=== 背景演示 ==="
+    narrator ""
+    narrator "--- 3. 玩家输入 ---"
+    narrator ""
+    narrator "请在输入框中输入你的名字，然后按回车或发送按钮。"
 
-    bg "1.jpg"
-    narrator "已设置背景：1.jpg"
+    input player_name "请输入你的名字："
+    narrator "你好，{player_name}！输入功能正常。"
+    set test_passed += 1
+
+    narrator ""
+    narrator "--- 4. 背景切换 ---"
+    narrator ""
+    narrator "接下来将切换背景，请观察是否变化："
 
     bg "2.jpg"
-    narrator "已更换背景：2.jpg"
+    narrator "已切换到背景 2.jpg"
+    narrator "（如果背景变化，说明背景功能正常）"
 
+    wait 1.0
     bg none
-    narrator "已清除背景（透明）"
+    narrator "已清除背景"
+    set test_passed += 1
 
-    jump demo_operators
-end
-
-# ==================== 6. 变量运算演示 ====================
-label demo_operators:
-    narrator "=== 变量运算演示 ==="
+    narrator ""
+    narrator "--- 5. 变量运算 ---"
 
     set gold = 100
     narrator "初始金币：{gold}"
 
     set gold += 50
-    narrator "金币 +50 后：{gold}"
-
-    set gold -= 30
-    narrator "金币 -30 后：{gold}"
+    narrator "加 50 后：{gold}（应为 150）"
 
     set gold *= 2
-    narrator "金币 *2 后：{gold}"
+    narrator "乘 2 后：{gold}（应为 300）"
+    set test_passed += 1
 
-    set gold /= 4
-    narrator "金币 /4 后：{gold}"
+    narrator ""
+    narrator "--- 6. 条件判断 ---"
 
-    jump demo_condition
-end
-
-# ==================== 7. 条件分支演示 ====================
-label demo_condition:
-    narrator "=== 条件分支演示 ==="
-
-    set relationship = 30
+    set relationship = 50
 
     if relationship >= 50:
-        yuki "我们是好朋友呢！"
-    elseif relationship >= 30:
-        yuki "我们还算熟络吧..."
+        yuki "我们是好朋友呢！（条件判断通过）"
     else:
-        yuki "那个...我们还不熟..."
+        yuki "我们还不熟...（条件判断失败）"
     end
+    set test_passed += 1
 
-    # 布尔值测试
     set has_key = true
 
     if has_key == true:
-        narrator "你拥有一把钥匙。"
+        narrator "✓ 布尔值判断正常"
     else:
-        narrator "你没有钥匙。"
+        narrator "✗ 布尔值判断异常"
     end
 
-    jump demo_loop
-end
-
-# ==================== 8. 循环演示 ====================
-label demo_loop:
-    narrator "=== 循环演示 ==="
+    narrator ""
+    narrator "--- 7. 循环 ---"
 
     var i = 0
     while i < 3:
-        narrator "循环次数：{i}"
+        narrator "循环第 {i} 次"
         set i += 1
     end
+    narrator "✓ 循环功能正常（应输出 0、1、2）"
+    set test_passed += 1
 
-    narrator "循环结束！"
+    narrator ""
+    narrator "--- 8. 固定选项 ---"
+    narrator ""
+    narrator "接下来将显示选项按钮，请选择：去学校"
 
-    jump demo_python
+    options:
+        "去学校" -> test_school (desc="前往学校、上学、去教室")
+        "待在家里" -> test_home (desc="待在家、休息、不去")
+    end
 end
 
-# ==================== 9. Python 嵌入演示 ====================
-label demo_python:
-    narrator "=== Python 嵌入演示 ==="
+label test_school:
+    narrator "✓ 固定选项功能正常：选择了学校"
+    set test_passed += 1
+    jump after_options
+end
+
+label test_home:
+    narrator "✓ 固定选项功能正常：选择了在家"
+    set test_passed += 1
+    jump after_options
+end
+
+label after_options:
+    narrator ""
+    narrator "--- 9. 互动模式 ---"
+    narrator ""
+    narrator "接下来进入互动模式，请在输入框中输入：你好、聊天、再见"
+    narrator "AI 会根据你的输入匹配对应选项。"
+
+    interact:
+        "你好" -> interact_hello (desc="打招呼、说你好、问候")
+        "聊天" -> interact_chat (desc="聊天、搭话、交谈、说话")
+        "再见" -> interact_bye (desc="告别、说再见、离开、拜拜")
+        fallback "没听懂你的意思，请尝试说'你好'、'聊天'或'再见'。"
+    end
+end
+
+label interact_hello:
+    yuki "你好呀！"
+    set relationship += 10
+    narrator "✓ 互动模式正常：你好"
+    jump after_interact
+end
+
+label interact_chat:
+    yuki "想聊些什么呢？"
+    set relationship += 5
+    narrator "✓ 互动模式正常：聊天"
+    jump after_interact
+end
+
+label interact_bye:
+    narrator "你说了再见。"
+    narrator "✓ 互动模式正常：再见"
+    jump after_interact
+end
+
+label after_interact:
+    narrator "互动模式结束，测试通过！"
+    set test_passed += 1
+
+    narrator ""
+    narrator "--- 10. Python 嵌入 ---"
 
     python:
         import random
-        dice = random.randint(1, 6)
-        qf.set("dice_roll", dice)
+        qf.set("dice", random.randint(1, 6))
     end
 
-    narrator "你掷出了 {dice_roll} 点！"
+    narrator "掷骰子结果：{dice}"
+    narrator "✓ Python 嵌入功能正常"
+    set test_passed += 1
+
+    narrator ""
+    narrator "--- 11. Python 表达式插值 ---"
+    narrator ""
+    narrator "下面应在同一行中执行 Python 并显示结果："
 
     python:
-        bonus = dice * 10
-        qf.set("bonus_points", bonus)
+        import math
+        qf.set("sqrt_val", int(math.sqrt(144)))
     end
 
-    narrator "奖励点数：{bonus_points}"
+    narrator "√144 = {sqrt_val}"
+    set test_passed += 1
 
-    # 条件判断
-    python:
-        if dice >= 4:
-            qf.jump("demo_python_high")
-        else:
-            qf.jump("demo_python_low")
-    end
-end
-
-label demo_python_high:
-    yuki "运气不错嘛！"
-    jump demo_interact
-end
-
-label demo_python_low:
-    yuki "再接再厉哦~"
-    jump demo_interact
-end
-
-# ==================== 10. 互动模式演示 ====================
-label demo_interact:
-    narrator "=== 互动模式演示 ==="
-    narrator "接下来进入互动模式，请尝试输入：打招呼、询问、离开"
-
-    yuki "你想做什么呢？"
-
-    interact:
-        "打招呼" -> interact_greet (desc="向她问候、说你好")
-        "询问" -> interact_ask (desc="问她一些问题")
-        "离开" -> interact_leave (desc="告别并离开")
-        fallback "雪歪了歪头，似乎没理解你的意思。"
-        fallback "雪看着你，等待你说些别的..."
-        fallback "你可以尝试说'打招呼'或'询问'哦~"
-    end
-
-    jump demo_call_return
-end
-
-label interact_greet:
-    yuki "你好！很高兴见到你！"
-    set relationship += 10
-    narrator "亲密度 +10，当前：{relationship}"
-    jump demo_interact_end
-end
-
-label interact_ask:
-    yuki "你想问我什么？"
-    set relationship += 5
-    narrator "亲密度 +5，当前：{relationship}"
-    jump demo_interact_end
-end
-
-label interact_leave:
-    narrator "你转身离开了。"
-    yuki "再见！"
-    jump demo_interact_end
-end
-
-label demo_interact_end:
-    narrator "互动模式结束！"
-
-    jump demo_call_return
-end
-
-# ==================== 11. Call/Return 演示 ====================
-label demo_call_return:
-    narrator "=== Call/Return 演示 ==="
-
+    narrator ""
+    narrator "--- 12. Call/Return ---"
+    narrator ""
     narrator "调用子程序..."
-    call sub_routine
 
-    narrator "返回主流程！"
-    narrator "Call/Return 测试完成！"
+    call test_subroutine
 
-    jump demo_wait
+    narrator "✓ 从子程序返回，Call/Return 功能正常"
+    set test_passed += 1
+
+    narrator ""
+    narrator "--- 13. 多脚本跳转 ---"
+    narrator ""
+    narrator "即将跳转到 chapter_test.qf 中的标签..."
+
+    jump chapter_test.begin
 end
 
 # 子程序
-label sub_routine:
+label test_subroutine:
     yuki "这是子程序的内容~"
-    haru "执行完毕，准备返回！"
+    narrator "（如果看到这里后自动返回主流程，说明 Call/Return 正常）"
     return
 end
 
-# ==================== 12. Wait 演示 ====================
-label demo_wait:
-    narrator "=== Wait 演示 ==="
+# 多脚本跳转的目标（由 chapter_test.qf 返回后继续）
+label after_chapter:
+    narrator ""
+    narrator "--- 14. Wait 等待 ---"
 
     narrator "等待 1.5 秒..."
     wait 1.5
+    narrator "✓ 等待功能正常"
+    set test_passed += 1
 
-    narrator "等待完成！"
+    narrator ""
+    narrator "--- 15. 存档 ---"
 
-    jump demo_system
-end
-
-# ==================== 13. 系统功能演示 ====================
-label demo_system:
-    narrator "=== 系统功能演示 ==="
-
-    # 保存功能
-    narrator "游戏存档中..."
+    narrator "正在存档..."
     save
-    narrator "存档完成！"
+    narrator "✓ 存档功能正常"
+    set test_passed += 1
 
-    # 加载功能（可选）
-    # narrator "载入存档..."
-    # load
-
-    # 退出游戏
-    jump demo_end
-end
-
-# ==================== 14. 结束 ====================
-label demo_end:
-    narrator "========== 演示结束 =========="
-    narrator "感谢体验 QriaFiction！"
+    narrator ""
+    narrator "━━━━━━━━━━━━━━━━━━━━"
+    narrator "测试完成！通过 {test_passed} 项测试"
+    narrator "━━━━━━━━━━━━━━━━━━━━"
+    narrator ""
+    narrator "如果所有功能都显示正常，说明引擎工作正常。"
 
     quit
 end

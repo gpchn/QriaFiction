@@ -6,6 +6,31 @@ from core.runtime import Runtime, Character
 from core.ai_engine import AIEngine
 from core.errors import QFRuntimeError
 from core.text_utils import interpolate_text
+from core.stmt_handlers import (
+    StmtHandler,
+    DefineCharacterStmtHandler,
+    BgStmtHandler,
+    DialogueStmtHandler,
+    InteractStmtHandler,
+    OptionsStmtHandler,
+    LabelStmtHandler,
+    JumpStmtHandler,
+    CallStmtHandler,
+    ReturnStmtHandler,
+    VarStmtHandler,
+    BreakStmtHandler,
+    ContinueStmtHandler,
+    SetStmtHandler,
+    InputStmtHandler,
+    IfStmtHandler,
+    WhileStmtHandler,
+    WaitStmtHandler,
+    SaveStmtHandler,
+    LoadStmtHandler,
+    QuitStmtHandler,
+    PythonBlockStmtHandler,
+    AudioStmtHandler,
+)
 
 
 class QriaContext:
@@ -61,6 +86,33 @@ class Interpreter:
         self._loaded_scripts: set[str] = set()
         self._main_program: Program = None
         self._main_filename: str = "main.qf"
+        self._stmt_handlers = self._init_stmt_handlers()
+
+    def _init_stmt_handlers(self) -> list[StmtHandler]:
+        return [
+            DefineCharacterStmtHandler(self),
+            BgStmtHandler(self),
+            DialogueStmtHandler(self),
+            InteractStmtHandler(self),
+            OptionsStmtHandler(self),
+            LabelStmtHandler(self),
+            JumpStmtHandler(self),
+            CallStmtHandler(self),
+            ReturnStmtHandler(self),
+            VarStmtHandler(self),
+            BreakStmtHandler(self),
+            ContinueStmtHandler(self),
+            SetStmtHandler(self),
+            InputStmtHandler(self),
+            IfStmtHandler(self),
+            WhileStmtHandler(self),
+            WaitStmtHandler(self),
+            SaveStmtHandler(self),
+            LoadStmtHandler(self),
+            QuitStmtHandler(self),
+            PythonBlockStmtHandler(self),
+            AudioStmtHandler(self),
+        ]
 
     def scan_scripts(self):
         if self.script_dir and self.script_dir.exists():
@@ -74,6 +126,8 @@ class Interpreter:
         self._load_all_scripts()
         self._execute_top_level_statements(program, namespace=None)
         if "start" in self.labels:
+            self.runtime.current_label = "start"
+            self.runtime.statement_index = 0
             self._execute_block(self.labels["start"])
         else:
             self._execute_block(program.statements)
@@ -138,16 +192,23 @@ class Interpreter:
                 self.labels[label_name] = stmt.body
 
     def _execute_block(self, statements: list):
-        i = 0
-        while i < len(statements) and self.runtime.running:
+        while self.runtime.running:
             if self.runtime.pending_jump:
                 target = self.runtime.pending_jump
+                if target in ("__break__", "__continue__"):
+                    return
                 self.runtime.pending_jump = None
                 if target in self.labels:
-                    self._execute_block(self.labels[target])
-                    return
+                    self.runtime.current_label = target
+                    self.runtime.statement_index = 0
+                    statements = self.labels[target]
+                    continue
                 else:
                     raise QFRuntimeError(f"未知标签: {target}")
+
+            i = self.runtime.statement_index
+            if i >= len(statements):
+                return
 
             stmt = statements[i]
             self._execute(stmt)
@@ -163,7 +224,7 @@ class Interpreter:
             if self.runtime.pending_save or self.runtime.pending_load or self.runtime.pending_quit:
                 return
 
-            i += 1
+            self.runtime.statement_index = i + 1
 
     def _interpolate(self, text: str) -> str:
         return interpolate_text(
@@ -174,157 +235,11 @@ class Interpreter:
         )
 
     def _execute(self, stmt: Stmt):
-        if isinstance(stmt, DefineCharacterStmt):
-            self.runtime.add_character(stmt.name, Character(
-                name=stmt.display_name,
-                avatar=stmt.avatar,
-                color=stmt.color,
-            ))
-
-        elif isinstance(stmt, BgStmt):
-            self.runtime.background = stmt.path
-
-        elif isinstance(stmt, DialogueStmt):
-            text = self._interpolate(stmt.text)
-            self.runtime.queue_dialogue(stmt.character, text)
-
-        elif isinstance(stmt, InteractStmt):
-            self.runtime.queue_interact(
-                actions=stmt.actions,
-                fallbacks=stmt.fallbacks,
-            )
-
-        elif isinstance(stmt, LabelStmt):
-            self.runtime.current_label = stmt.name
-
-        elif isinstance(stmt, JumpStmt):
-            if stmt.is_otherwise:
-                self.runtime.set_jump(stmt.target)
-            elif stmt.condition:
-                if self._eval_expr(stmt.condition):
-                    self.runtime.set_jump(stmt.target)
-            else:
-                self.runtime.set_jump(stmt.target)
-
-        elif isinstance(stmt, CallStmt):
-            if stmt.condition and not self._eval_expr(stmt.condition):
+        for handler in self._stmt_handlers:
+            if handler.can_handle(stmt):
+                handler.execute(stmt)
                 return
-            self.runtime.call_stack.append(self.runtime.current_label)
-            self.runtime.set_jump(stmt.target)
-
-        elif isinstance(stmt, ReturnStmt):
-            if self.runtime.call_stack:
-                caller = self.runtime.call_stack.pop()
-                self.runtime.set_jump(caller)
-
-        elif isinstance(stmt, VarStmt):
-            if stmt.value:
-                self.runtime.set(stmt.name, self._eval_expr(stmt.value))
-            else:
-                self.runtime.set(stmt.name, None)
-
-        elif isinstance(stmt, BreakStmt):
-            self.runtime.set_jump("__break__")
-
-        elif isinstance(stmt, ContinueStmt):
-            self.runtime.set_jump("__continue__")
-
-        elif isinstance(stmt, SetStmt):
-            value = self._eval_expr(stmt.value)
-            current = self.runtime.get(stmt.name)
-            if stmt.operator == "=":
-                self.runtime.set(stmt.name, value)
-            elif stmt.operator == "+=":
-                self.runtime.set(stmt.name, (current or 0) + value)
-            elif stmt.operator == "-=":
-                self.runtime.set(stmt.name, (current or 0) - value)
-            elif stmt.operator == "*=":
-                self.runtime.set(stmt.name, (current or 0) * value)
-            elif stmt.operator == "/=":
-                current = current or 1
-                self.runtime.set(stmt.name, current / value if value else current)
-
-        elif isinstance(stmt, InputStmt):
-            self.runtime.queue_input_prompt(stmt.name, stmt.prompt)
-
-        elif isinstance(stmt, IfStmt):
-            for branch in stmt.branches:
-                if self._eval_expr(branch.condition):
-                    self._execute_block(branch.body)
-                    return
-            if stmt.else_body:
-                self._execute_block(stmt.else_body)
-
-        elif isinstance(stmt, WhileStmt):
-            while self._eval_expr(stmt.condition):
-                self._execute_block(stmt.body)
-                if self.runtime.pending_jump == "__break__":
-                    self.runtime.pending_jump = None
-                    return
-                if self.runtime.pending_jump == "__continue__":
-                    self.runtime.pending_jump = None
-                if self.runtime.pending_dialogues or self.runtime.pending_input or self.runtime.pending_interact:
-                    return
-                if self.runtime.pending_save or self.runtime.pending_load or self.runtime.pending_quit:
-                    return
-
-        elif isinstance(stmt, WaitStmt):
-            self.runtime.queue_dialogue(None, f"[等待 {stmt.duration or '点击'}]")
-
-        elif isinstance(stmt, SaveStmt):
-            self.runtime.pending_save = True
-
-        elif isinstance(stmt, LoadStmt):
-            self.runtime.pending_load = True
-
-        elif isinstance(stmt, QuitStmt):
-            self.runtime.pending_quit = True
-
-        elif isinstance(stmt, PythonBlockStmt):
-            self._execute_python(stmt.code)
-
-        elif isinstance(stmt, PlayMusicStmt):
-            self.runtime.pending_audio = {
-                "type": "play_music",
-                "path": stmt.path,
-                "loop": stmt.loop,
-                "volume": stmt.volume,
-                "fade_in": stmt.fade_in,
-            }
-
-        elif isinstance(stmt, PlaySoundStmt):
-            self.runtime.pending_audio = {
-                "type": "play_sound",
-                "path": stmt.path,
-                "volume": stmt.volume,
-            }
-
-        elif isinstance(stmt, StopMusicStmt):
-            self.runtime.pending_audio = {
-                "type": "stop_music",
-                "fade_out": stmt.fade_out,
-            }
-
-        elif isinstance(stmt, StopSoundStmt):
-            self.runtime.pending_audio = {
-                "type": "stop_sound",
-            }
-
-        elif isinstance(stmt, SetVolumeStmt):
-            if stmt.music_volume >= 0:
-                self.runtime.music_volume = stmt.music_volume
-                self.runtime.pending_audio = {
-                    "type": "set_volume",
-                    "music_volume": stmt.music_volume,
-                    "sound_volume": self.runtime.sound_volume,
-                }
-            if stmt.sound_volume >= 0:
-                self.runtime.sound_volume = stmt.sound_volume
-                self.runtime.pending_audio = {
-                    "type": "set_volume",
-                    "music_volume": self.runtime.music_volume,
-                    "sound_volume": stmt.sound_volume,
-                }
+        raise QFRuntimeError(f"未知的语句类型: {type(stmt).__name__}")
 
     def _execute_python(self, code: str):
         if self._python_scope.get("qf") is None:

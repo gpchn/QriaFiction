@@ -1,0 +1,40 @@
+{
+  "name": "qfs-language",
+  "displayName": "QriaFiction Script Language",
+  "description": "Syntax highlighting for QriaFiction Script (.qf) language",
+  "version": "0.1.1",
+  "publisher": "gpchn",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gpchn/QriaFiction"
+  },
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "qfs",
+        "aliases": [
+          "QriaFiction Script",
+          "qfs"
+        ],
+        "extensions": [
+          ".qf"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "qfs",
+        "scopeName": "source.qfs",
+        "path": "./syntaxes/qfs.tmLanguage.json"
+      }
+    ]
+  }
+}

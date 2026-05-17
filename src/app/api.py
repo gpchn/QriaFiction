@@ -13,7 +13,7 @@ from core.parser import Parser
 from core.interpreter import Interpreter
 from core.runtime import Runtime, Character
 from core.ast import Program, LabelStmt, BgStmt, DialogueStmt, InteractStmt, \
-    CallStmt, ReturnStmt, InputStmt, WaitStmt, SaveStmt, LoadStmt, QuitStmt, \
+    OptionsStmt, CallStmt, ReturnStmt, InputStmt, WaitStmt, SaveStmt, LoadStmt, QuitStmt, \
     PlayMusicStmt, PlaySoundStmt, StopMusicStmt, StopSoundStmt, SetVolumeStmt
 from core.text_utils import interpolate_text_with_logging
 
@@ -284,12 +284,29 @@ class GameRunner:
 
     def _exec_label(self, label_name: str, resume_from: int = 0):
         _log("I", "label", f"{label_name} (resume={resume_from})")
-        if label_name not in self.interp.labels:
+        resolved_label = self._resolve_label(label_name)
+        if not resolved_label:
             self._show_dialogue(None, f"[错误] 未知标签: {label_name}")
             return
-        self.runtime.current_label = label_name
-        self.interp.runtime.current_label = label_name
-        self._exec_block(self.interp.labels[label_name], resume_from=resume_from)
+        self.runtime.current_label = resolved_label
+        self.interp.runtime.current_label = resolved_label
+        self._exec_block(self.interp.labels[resolved_label], resume_from=resume_from)
+
+    def _resolve_label(self, label_name: str) -> str | None:
+        """解析标签名，支持本地标签查找和主脚本标签查找"""
+        if label_name in self.interp.labels:
+            return label_name
+        current = self.runtime.current_label
+        if current and "." in current:
+            ns = current.split(".")[0]
+            namespaced = f"{ns}.{label_name}"
+            if namespaced in self.interp.labels:
+                return namespaced
+        if "." in label_name:
+            local_name = label_name.split(".", 1)[1]
+            if local_name in self.interp.labels:
+                return local_name
+        return None
 
     def _exec_block(self, statements: list, resume_from: int = 0):
         i = resume_from
@@ -366,6 +383,9 @@ class GameRunner:
 
         elif isinstance(stmt, InteractStmt):
             self._exec_interact(stmt.actions, stmt.fallbacks)
+
+        elif isinstance(stmt, OptionsStmt):
+            self._exec_options(stmt.items)
 
         elif isinstance(stmt, CallStmt):
             if stmt.condition and not self.interp._eval_expr(stmt.condition):
@@ -453,6 +473,28 @@ class GameRunner:
                 _log("I", "interact", f"fallback: {fb}")
                 self._show_dialogue(None, fb)
                 self._ui_call("handleInteract", "你想做什么？", fb_texts)
+
+    def _exec_options(self, items):
+        available = [item for item in items if not item.condition or self.interp._eval_expr(item.condition)]
+        _log("I", "options", [item.text for item in available])
+        self._ui_call("showOptions", [
+            {"text": item.text, "label": item.label, "desc": item.desc}
+            for item in available
+        ])
+
+        while self.runtime.running:
+            self.user_input_event.wait()
+            self.user_input_event.clear()
+            selected_label = self.user_input_value
+            self.user_input_value = ""
+
+            if not selected_label:
+                continue
+
+            _log("I", "options", f"selected: {selected_label}")
+            self.runtime.set("_user_input", selected_label)
+            self.runtime.set_jump(selected_label)
+            return
 
     def _match_action(self, user_text: str, actions: list):
         if self.interp.ai_engine and self.interp.ai_engine.provider != "keyword":

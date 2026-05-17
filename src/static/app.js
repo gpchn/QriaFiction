@@ -43,7 +43,12 @@ window.addEventListener('pywebviewready', () => {
 
             const modal = ref({ show: false, title: '', type: '', projectTitle: '', confirm: () => {} });
             function openModal(title, type, data, onConfirm) {
-                modal.value = { show: true, title, type, projectTitle: data?.title || '', confirm: onConfirm || (() => {}) };
+                const m = modal.value;
+                m.show = true;
+                m.title = title;
+                m.type = type;
+                m.projectTitle = data?.title || '';
+                m.confirm = onConfirm || (() => {});
             }
 
             function toggleTheme() { applyTheme(!isDark.value); }
@@ -95,8 +100,9 @@ window.addEventListener('pywebviewready', () => {
                     ok(await pywebview.api.launch_project(id));
                     view.value = 'game';
                     messages.value = [];
-                    gameStatus.value = '运行中...';
                     saveSlots.value = [];
+                    optionsPanel.value.show = false;
+                    optionsPanel.value.items = [];
                 }
                 catch (e) { toast(e.message, 'error'); }
             }
@@ -129,12 +135,20 @@ window.addEventListener('pywebviewready', () => {
                 } catch (e) { toast(e.message, 'error'); }
             }
 
-            const gameStatus = ref('就绪');
             const gameLoading = ref(false);
             const gameInputEnabled = ref(false);
             const gameInput = ref('');
             const gamePlaceholder = ref('输入...');
             const gameProjectName = ref('');
+            const optionsPanel = ref({ show: false, items: [] });
+            function selectOption(label) {
+                optionsPanel.value.show = false;
+                gameInput.value = '';
+                enableInput(false);
+                showContinueHint.value = false;
+                try { pywebview.api.submit_input(label); }
+                catch (e) { console.error('submit_input error', e); }
+            }
             const messages = ref([]);
             const msgContainer = ref(null);
             const showContinueHint = ref(false);
@@ -144,6 +158,10 @@ window.addEventListener('pywebviewready', () => {
             const newSaveName = ref('');
 
             function addMsg(type, text, name, color, avatar) {
+                if (!text) {
+                    messages.value.push({ type: 'divider', text: '', name: '', color: '', avatar: '' });
+                    return;
+                }
                 messages.value.push({ type, text, name: name || '', color: color || '', avatar: avatar || '' });
             }
 
@@ -178,12 +196,13 @@ window.addEventListener('pywebviewready', () => {
                 try { await pywebview.api.return_to_launcher(); } catch {}
                 view.value = 'launcher';
                 messages.value = [];
-                gameStatus.value = '就绪';
                 gameInputEnabled.value = false;
                 gameProjectName.value = '';
                 showContinueHint.value = false;
                 saveManagerOpen.value = false;
                 saveSlots.value = [];
+                optionsPanel.value.show = false;
+                optionsPanel.value.items = [];
                 window.setBackground('');
                 await loadProjects();
             }
@@ -335,16 +354,18 @@ window.addEventListener('pywebviewready', () => {
                     _notifyLoaded('bg_image_loaded');
                 });
             };
-            window.setStatus = (t) => { gameStatus.value = t; };
             window.getUserInput = (prompt) => {
-                gameStatus.value = prompt;
                 gamePlaceholder.value = prompt;
                 enableInput(true);
             };
             window.handleInteract = (prompt, fallbacks) => {
-                gameStatus.value = prompt || '你想做什么？';
-                gamePlaceholder.value = prompt || '输入...';
+                gamePlaceholder.value = prompt || '你想做什么？';
                 enableInput(true);
+            };
+            window.showOptions = (items) => {
+                optionsPanel.value.items = items;
+                optionsPanel.value.show = true;
+                enableInput(false);
             };
             window.showContinue = () => {
                 showContinueHint.value = true;
@@ -497,6 +518,7 @@ window.addEventListener('pywebviewready', () => {
 
             onMounted(() => {
                 Promise.all([loadProjects(), loadModels(), loadCfg()]);
+                let continueCooldown = false;
                 document.addEventListener('keydown', (e) => {
                     if (e.key === 'Escape' && modal.value.show) {
                         modal.value.show = false;
@@ -511,10 +533,13 @@ window.addEventListener('pywebviewready', () => {
                     if (e.key === 'Enter' && view.value === 'game' && gameInputEnabled.value) {
                         sendInput();
                     }
-                    if (e.key === ' ' && showContinueHint.value && view.value === 'game') {
+                    if ((e.key === ' ' || e.key === 'Control') && showContinueHint.value && view.value === 'game') {
+                        if (continueCooldown) { e.preventDefault(); return; }
+                        continueCooldown = true;
                         e.preventDefault();
                         showContinueHint.value = false;
                         pywebview.api.continue_game();
+                        setTimeout(() => { continueCooldown = false; }, 100);
                     }
                 });
             });
@@ -526,8 +551,9 @@ window.addEventListener('pywebviewready', () => {
                 toggleTheme, applyTheme,
                 openImport, askDelete, launch,
                 openAddModel, removeModel, saveCfg,
-                gameStatus, gameLoading, gameInputEnabled, gameInput, gamePlaceholder, gameProjectName,
+                gameLoading, gameInputEnabled, gameInput, gamePlaceholder, gameProjectName,
                 messages, msgContainer, showContinueHint,
+                optionsPanel, selectOption,
                 saveManagerOpen, saveSlots, newSaveName,
                 sendInput, backToLauncher, reloadScript, onMsgAreaClick,
                 contrastColor, colorBubble,

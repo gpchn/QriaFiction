@@ -256,12 +256,6 @@
                 </div>
             </div>
         </div>
-
-        <!-- Footer -->
-        <footer class="h-8 flex items-center justify-between px-8 text-[12px] font-medium border-t flex-shrink-0" style="border-color:var(--line);color:var(--fg-f)">
-            <span>就绪</span>
-            <span>v0.1.0</span>
-        </footer>
     </main>
 </div>
 
@@ -311,8 +305,14 @@
             </div>
 
             <div v-for="(m, i) in messages" :key="i" class="msg-in">
+                <!-- Divider -->
+                <div v-if="m.type==='divider'" class="py-3 flex items-center gap-3">
+                    <span class="flex-1 h-px" style="background:var(--line)"></span>
+                    <span class="text-[12px]" style="color:var(--fg-f)">◆</span>
+                    <span class="flex-1 h-px" style="background:var(--line)"></span>
+                </div>
                 <!-- System / Narrator -->
-                <div v-if="m.type==='system'" class="py-3 text-center">
+                <div v-else-if="m.type==='system'" class="py-3 text-center">
                     <span class="text-[15px] font-semibold px-5 py-2 rounded-full inline-block max-w-full" style="color:var(--fg-m);border:1px solid var(--line);background:var(--s1)">{{ m.text }}</span>
                 </div>
                 <!-- Character / User -->
@@ -360,7 +360,20 @@
 
     <!-- Input -->
     <div class="px-6 py-4 border-t" style="position:fixed;bottom:0;left:0;right:0;z-index:10;background:rgba(0,0,0,0.6);backdrop-filter:blur(8px);border-color:rgba(255,255,255,0.08);">
-        <div class="max-w-2xl mx-auto flex gap-3">
+        <!-- Options Panel -->
+        <div v-if="optionsPanel.show" class="max-w-2xl mx-auto mb-4">
+            <div class="flex flex-wrap gap-2 justify-center">
+                <button v-for="(opt, i) in optionsPanel.items" :key="i" @click="selectOption(opt.label)"
+                    class="px-5 py-2.5 text-[14px] font-medium rounded transition-all duration-150"
+                    style="border:1px solid var(--line);color:var(--fg);background:var(--s1)"
+                    @mouseenter="$event.target.style.background='var(--s3)'"
+                    @mouseleave="$event.target.style.background='var(--s1)'">
+                    {{ opt.text }}
+                </button>
+            </div>
+        </div>
+        <!-- Normal Input -->
+        <div v-else class="max-w-2xl mx-auto flex gap-3">
             <input type="text" v-model="gameInput" @keydown.enter="sendInput"
                 :disabled="!gameInputEnabled"
                 :placeholder="gamePlaceholder" autocomplete="off" spellcheck="false"

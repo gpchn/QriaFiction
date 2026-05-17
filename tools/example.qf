@@ -1,0 +1,457 @@
+# ============================================================
+# QriaFiction Script — 语法高亮全覆盖测试
+# 覆盖所有关键字、运算符、语句结构、边界情况
+# ============================================================
+
+# ---------- 1. 注释 ----------
+# 行首注释
+    # 缩进注释
+x = 1  # 行尾注释（# 前无引号时应高亮为注释）
+
+# ---------- 2. 角色定义 ----------
+define narrator = character(name="旁白", avatar="", color="#888888")
+define hero = character(name="勇者", avatar="hero.png", color="#ff6600")
+define villian = character(name="魔王", avatar="villain.png", color="#cc0000")
+define empty = character(name="", avatar="", color="#000000")
+
+# ---------- 3. 变量声明 ----------
+var name = "勇者"
+var score = 0
+var level = 1.5
+var has_key = true
+var has_sword = false
+var nothing = none
+var items = "sword"
+
+# ---------- 4. 字符串（双引号） ----------
+narrator "这是一条普通的对话"
+narrator "包含转义：换行\n制表符\t反斜杠\\双引号\"单引号\'"
+narrator "空字符串："
+narrator "含数字 12345 和浮点数 3.14"
+narrator "含 # 井号不会被识别为注释"
+narrator "含 python: 关键字不应高亮"
+narrator "含 end 关键字不应高亮"
+narrator "含变量 {name} 和 {score}"
+narrator "含 python 表达式 {python: score * 2}"
+narrator "含空格 python { python: score + 100 }"
+
+# ---------- 5. 字符串（单引号） ----------
+narrator '单引号字符串'
+narrator '转义：\n\t\\\'\"'
+narrator '变量：{name}'
+narrator 'python：{python: level ** 2}'
+
+# ---------- 6. 运算符 ----------
+set score = 100
+set score += 50
+set score -= 20
+set score *= 2
+set score /= 5
+set score = 1 + 2
+set score = 10 - 3
+set score = 3 * 4
+set score = 10 / 3
+set score = 10 // 3
+set score = 10 % 3
+set score = 2 ** 8
+set score = (1 + 2) * 3
+set score = ((1 + 2) * (3 + 4))
+
+# ---------- 7. 比较与逻辑运算符 ----------
+if score >= 100:
+    narrator "满分"
+end
+if score <= 0:
+    narrator "零分"
+end
+if score == 100:
+    narrator "等于"
+end
+if score != 0:
+    narrator "不等于"
+end
+if score > 50:
+    narrator "大于"
+end
+if score < 200:
+    narrator "小于"
+end
+if score > 50 and level > 1:
+    narrator "and"
+end
+if score > 50 or level > 2:
+    narrator "or"
+end
+if not has_key:
+    narrator "not"
+end
+if score == 100 and level > 1 or not has_key:
+    narrator "复合逻辑"
+end
+
+# ---------- 8. if / elseif / else ----------
+if score >= 90:
+    narrator "优秀"
+elseif score >= 60:
+    narrator "及格"
+elseif score >= 30:
+    narrator "勉强"
+else:
+    narrator "不及格"
+end
+
+# 嵌套 if
+if has_key == true:
+    narrator "有钥匙"
+    if score > 50:
+        narrator "分数也高"
+    else:
+        narrator "分数低"
+    end
+else:
+    narrator "没有钥匙"
+    if level >= 2:
+        narrator "但等级够"
+    end
+end
+
+# ---------- 9. while 循环 ----------
+var i = 0
+while i < 10:
+    narrator "第 {i} 次"
+    set i += 1
+end
+
+# 嵌套 while
+var x = 0
+while x < 3:
+    var y = 0
+    while y < 2:
+        narrator "({x}, {y})"
+        set y += 1
+    end
+    set x += 1
+end
+
+# 含 break/continue
+var n = 0
+while n < 10:
+    set n += 1
+    if n == 3:
+        narrator "跳过 3"
+        continue
+    end
+    if n == 7:
+        narrator "在 7 终止"
+        break
+    end
+    narrator "n = {n}"
+end
+
+# ---------- 10. 标签与跳转 ----------
+label start:
+    narrator "游戏开始"
+    jump end_scene
+
+label middle:
+    narrator "中间场景"
+    jump end_scene if score > 50
+    jump end_scene otherwise
+
+label end_scene:
+    narrator "结束"
+
+# ---------- 11. call / return ----------
+call intro
+call intro if level > 1
+
+label intro:
+    narrator "序章"
+    return
+
+# ---------- 12. 玩家输入 ----------
+input player_name "请输入你的名字："
+input choice "选择你的道路："
+
+# ---------- 13. options ----------
+options:
+    "去学校" -> school (desc="上学、去教室")
+    "待在家里" -> home (desc="在家、休息")
+    "去森林" -> forest (desc="冒险、探索")
+end
+
+options:
+    "开始战斗" -> fight (desc="战斗、攻击", condition=has_sword == true)
+    "逃跑" -> run (desc="逃跑、离开")
+    "投降" -> surrender (desc="投降、放弃")
+end
+
+# ---------- 14. interact ----------
+interact:
+    "你好" -> greet (desc="打招呼、问候、你好")
+    "聊天" -> chat (desc="聊天、说话、交谈")
+    "离开" -> leave (desc="走、离开、再见")
+    "战斗" -> fight (desc="打、战斗、攻击")
+    fallback "没听懂，请尝试说'你好'、'聊天'或'离开'。"
+    fallback "我不明白你的意思。"
+end
+
+interact:
+    "查看物品" -> check_items (desc="查看、背包、物品")
+    "使用钥匙" -> use_key (desc="用钥匙、开门", condition=has_key == true)
+    "使用剑" -> use_sword (desc="用剑、拔剑", condition=has_sword == true)
+    fallback "你不能这样做。"
+end
+
+# ---------- 15. 背景 ----------
+bg "bg/school.jpg"
+bg "bg/forest.png"
+bg "bg/castle.webp"
+bg none
+
+# ---------- 16. 等待 ----------
+wait 0.5
+wait 1.0
+wait 2.5
+wait click
+
+# ---------- 17. 系统命令 ----------
+save
+load
+quit
+
+# ---------- 18. 音频控制 ----------
+music "bgm/peaceful.mp3"
+music "bgm/battle.mp3" loop true
+music "bgm/battle.mp3" loop false
+music "bgm/ambient.ogg" volume 0.5
+music "bgm/sad.flac" volume 0.3 loop false with fade 3.0
+
+sound "sfx/door.wav"
+sound "sfx/footstep.ogg" volume 0.7
+
+stop music
+stop music with fade 2.0
+stop sound
+
+volume music = 0.5
+volume sound = 0.8
+
+# ---------- 19. 内置变量 ----------
+narrator "用户输入：{_user_input}"
+narrator "匹配动作：{_matched_action}"
+narrator "当前标签：{_label}"
+narrator "运行时间：{_playtime}"
+
+# ---------- 20. 修饰符 ----------
+jump final otherwise
+call intro with fade
+bg "forest.jpg" at center
+
+# ---------- 21. 关键字作为标识符 ----------
+var mypython = "python: not a keyword"
+var mydefine = "define not a keyword"
+var mylabel = "label not a keyword"
+var myend = "end not a keyword"
+var myif = "if not a keyword"
+var mywhile = "while not a keyword"
+var python_var = "value"
+var define_var = "value"
+var end_var = "value"
+
+# ---------- 22. python 代码块 ----------
+python:
+    import random
+    qf.set("dice", random.randint(1, 6))
+end
+
+python:
+    import math
+
+    def calculate_bonus(score, level):
+        base = score * level
+        if score > 100:
+            base *= 2
+        elif score > 50:
+            base += 50
+        else:
+            base -= 10
+        return base
+
+    result = calculate_bonus(
+        qf.get("score"),
+        qf.get("level")
+    )
+    qf.set("bonus", result)
+end
+
+python:
+    # Python 注释
+    items = ["sword", "shield", "potion"]
+    for item in items:
+        print(f"Found: {item}")
+
+    inventory = {
+        "weapons": 1,
+        "armor": 2,
+        "consumables": 5
+    }
+    qf.set("total_items", sum(inventory.values()))
+end
+
+# ---------- 23. 复杂表达式 ----------
+var a = 1 + 2 * 3 - 4 / 2
+var b = (1 + 2) * (3 - 4) / 2
+var c = 2 ** 3 ** 2
+var d = 100 // 7 % 3
+var e = a + b * c - d // 2
+
+if a == b and c != d:
+    narrator "复杂条件"
+end
+if e <= 100 or e >= 200:
+    narrator "范围判断"
+end
+if not (a > b and c < d):
+    narrator "取反复合"
+end
+
+# ---------- 24. 布尔值 ----------
+var flag_a = true
+var flag_b = false
+var flag_c = not flag_a
+var flag_d = flag_a and flag_b
+var flag_e = flag_a or flag_b
+var flag_f = not (flag_a and flag_b) or flag_c
+
+# ---------- 25. 完整流程 ----------
+label chapter1:
+    narrator "第一章"
+    jump scene1
+end
+
+label scene1:
+    narrator "场景一"
+    if has_key == true:
+        narrator "你带着钥匙"
+    end
+    jump scene2
+end
+
+label scene2:
+    narrator "场景二"
+    while score < 100:
+        narrator "继续积累分数"
+        set score += 10
+    end
+    jump chapter2
+end
+
+label chapter2:
+    narrator "第二章"
+    python:
+        qf.set("chapter", 2)
+    end
+    narrator "进入第二章"
+end
+
+# ---------- 26. 空行和纯空白 ----------
+
+
+
+
+# ---------- 27. 全部运算符一行 ----------
+var t1 = 1 + 2
+var t2 = 10 - 5
+var t3 = 3 * 4
+var t4 = 20 / 4
+var t5 = 20 // 3
+var t6 = 20 % 3
+var t7 = 2 ** 10
+var t8 = 1 == 1
+var t9 = 1 != 2
+var t10 = 1 < 2
+var t11 = 1 > 0
+var t12 = 1 <= 1
+var t13 = 1 >= 1
+
+# ---------- 28. 箭头运算符 ----------
+options:
+    "A" -> label_a (desc="选项A")
+    "B" -> label_b (desc="选项B")
+end
+
+interact:
+    "去" -> go (desc="前往")
+    "停" -> stop_action (desc="停止")
+    fallback "无效输入"
+end
+
+# ---------- 29. 字符串内各种边界 ----------
+narrator "}"
+narrator "{"
+narrator "{}"
+narrator "{  }"
+narrator "{  name  }"
+narrator "{python:1+1}"
+narrator "{  python:  1 + 1  }"
+
+# ---------- 30. 全部关键字清单（逐行） ----------
+define c = character(name="t", avatar="", color="#000")
+bg "x.png"
+interact:
+    "a" -> la (desc="d")
+    fallback "f"
+end
+options:
+    "o" -> lo (desc="d")
+end
+label test:
+    jump test
+    jump test if true
+    jump test otherwise
+    call test
+    return
+var v = 1
+set v = 2
+input p "prompt"
+if v == 1:
+    "one"
+elseif v == 2:
+    "two"
+else:
+    "other"
+end
+while v < 5:
+    set v += 1
+    break
+    continue
+end
+wait 1.0
+wait click
+save
+load
+quit
+python:
+    pass
+end
+music "m.mp3"
+sound "s.wav"
+stop music
+stop sound
+volume music = 1.0
+true
+false
+and
+or
+not
+none
+with
+at
+otherwise
+desc
+condition
+loop
+fade
+character
+end
