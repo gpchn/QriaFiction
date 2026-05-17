@@ -43,12 +43,23 @@ window.addEventListener('pywebviewready', () => {
 
             const modal = ref({ show: false, title: '', type: '', projectTitle: '', confirm: () => {} });
             function openModal(title, type, data, onConfirm) {
-                const m = modal.value;
-                m.show = true;
-                m.title = title;
-                m.type = type;
-                m.projectTitle = data?.title || '';
-                m.confirm = onConfirm || (() => {});
+                modal.value = {
+                    show: true,
+                    title: title,
+                    type: type,
+                    projectTitle: data?.title || '',
+                    confirm: onConfirm || (() => {})
+                };
+            }
+            
+            function closeModal() {
+                modal.value = {
+                    show: false,
+                    title: '',
+                    type: '',
+                    projectTitle: '',
+                    confirm: () => {}
+                };
             }
 
             function toggleTheme() { applyTheme(!isDark.value); }
@@ -521,14 +532,14 @@ window.addEventListener('pywebviewready', () => {
                 let continueCooldown = false;
                 document.addEventListener('keydown', (e) => {
                     if (e.key === 'Escape' && modal.value.show) {
-                        modal.value.show = false;
+                        closeModal();
                     }
                     if (e.key === 'Escape' && saveManagerOpen.value) {
                         saveManagerOpen.value = false;
                     }
                     if (e.key === 'Enter' && modal.value.show) {
                         modal.value.confirm();
-                        modal.value.show = false;
+                        closeModal();
                     }
                     if (e.key === 'Enter' && view.value === 'game' && gameInputEnabled.value) {
                         sendInput();
@@ -547,7 +558,7 @@ window.addEventListener('pywebviewready', () => {
             return {
                 view, page, isDark, tabs, currentPageTitle,
                 projects, models, cfg,
-                toasts, modal, openModal,
+                toasts, modal, openModal, closeModal,
                 toggleTheme, applyTheme,
                 openImport, askDelete, launch,
                 openAddModel, removeModel, saveCfg,

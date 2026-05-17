@@ -1,247 +1,531 @@
-# QriaFiction 全功能测试脚本（主入口）
-# 用于验证所有语言功能是否正常工作
+# ============================================
+# 时光之塔 - QriaFiction 完整示例游戏
+# 展示所有功能：角色、对话、分支、AI互动、音频、变量、Python嵌入、存档
+# ============================================
 
-# ==================== 角色定义 ====================
+# 角色定义
 define narrator = character(name="", avatar="", color="#888888")
-define yuki = character(name="雪", avatar="", color="#87ceeb")
-define haru = character(name="春", avatar="", color="#ffb6c1")
+define aria = character(name="艾丽娅", avatar="avatar/aria.png", color="#87ceeb")
+define kai = character(name="凯", avatar="avatar/kai.png", color="#4a90d9")
+define elder = character(name="长老", avatar="avatar/elder.png", color="#9966cc")
+define guardian = character(name="守护者", avatar="avatar/guardian.png", color="#ff6600")
 
-# ==================== 变量声明 ====================
-var player_name = "勇者"
-var gold = 100
-var relationship = 0
-var has_key = false
+# 初始化变量
+var player_name = "旅行者"
 var day = 1
-var test_passed = 0
+var courage = 0
+var wisdom = 0
+var friendship = 0
+var has_key = false
+var has_crystal = false
+var secret_found = false
+var game_phase = 0
 
-# ==================== 主入口 ====================
+# ============================================
+# 第一章：序章
+# ============================================
+
 label start:
-    bg "1.jpg"
-    narrator "━━━━━━━━━━━━━━━━━━━━"
-    narrator "QriaFiction 全功能测试"
-    narrator "━━━━━━━━━━━━━━━━━━━━"
-    narrator ""
-    narrator "本脚本将依次测试所有语言功能。"
-    narrator "请按照提示进行操作，确认每项功能正常。"
-
-    narrator ""
-    narrator "--- 1. 角色与对话 ---"
-    narrator ""
-    narrator "下方应显示角色名称和对话："
-
-    yuki "你好！我是雪！"
-    haru "我是春，很高兴认识你！"
-
-    "（上面应显示两条不同角色的对话）"
-
-    narrator ""
-    narrator "--- 2. 字符串插值 ---"
-
-    narrator "你的名字是：{player_name}，今天是第 {day} 天"
-
-    narrator ""
-    narrator "--- 3. 玩家输入 ---"
-    narrator ""
-    narrator "请在输入框中输入你的名字，然后按回车或发送按钮。"
-
-    input player_name "请输入你的名字："
-    narrator "你好，{player_name}！输入功能正常。"
-    set test_passed += 1
-
-    narrator ""
-    narrator "--- 4. 背景切换 ---"
-    narrator ""
-    narrator "接下来将切换背景，请观察是否变化："
-
-    bg "2.jpg"
-    narrator "已切换到背景 2.jpg"
-    narrator "（如果背景变化，说明背景功能正常）"
-
+    "欢迎来到时光之塔..."
     wait 1.0
-    bg none
-    narrator "已清除背景"
-    set test_passed += 1
+    narrator "在这片被遗忘的大陆中央，矗立着一座神秘的高塔..."
+    narrator "传说塔中封印着改变时间的力量..."
+    narrator "而你，一位年轻的旅行者，在一个雨夜来到了塔底..."
 
-    narrator ""
-    narrator "--- 5. 变量运算 ---"
+    input player_name "请告诉我你的名字："
 
-    set gold = 100
-    narrator "初始金币：{gold}"
-
-    set gold += 50
-    narrator "加 50 后：{gold}（应为 150）"
-
-    set gold *= 2
-    narrator "乘 2 后：{gold}（应为 300）"
-    set test_passed += 1
-
-    narrator ""
-    narrator "--- 6. 条件判断 ---"
-
-    set relationship = 50
-
-    if relationship >= 50:
-        yuki "我们是好朋友呢！（条件判断通过）"
-    else:
-        yuki "我们还不熟...（条件判断失败）"
-    end
-    set test_passed += 1
-
-    set has_key = true
-
-    if has_key == true:
-        narrator "✓ 布尔值判断正常"
-    else:
-        narrator "✗ 布尔值判断异常"
-    end
-
-    narrator ""
-    narrator "--- 7. 循环 ---"
-
-    var i = 0
-    while i < 3:
-        narrator "循环第 {i} 次"
-        set i += 1
-    end
-    narrator "✓ 循环功能正常（应输出 0、1、2）"
-    set test_passed += 1
-
-    narrator ""
-    narrator "--- 8. 固定选项 ---"
-    narrator ""
-    narrator "接下来将显示选项按钮，请选择：去学校"
+    narrator "欢迎你，{player_name}！"
 
     options:
-        "去学校" -> test_school (desc="前往学校、上学、去教室")
-        "待在家里" -> test_home (desc="待在家、休息、不去")
+        "进入塔内" -> enter_tower (desc="勇敢地进入时光之塔")
+        "先看看周围" -> look_around (desc="在塔底先探索一下")
     end
 end
 
-label test_school:
-    narrator "✓ 固定选项功能正常：选择了学校"
-    set test_passed += 1
-    jump after_options
-end
+label enter_tower:
+    set courage += 10
+    bg "tower_entrance.png"
 
-label test_home:
-    narrator "✓ 固定选项功能正常：选择了在家"
-    set test_passed += 1
-    jump after_options
-end
-
-label after_options:
-    narrator ""
-    narrator "--- 9. 互动模式 ---"
-    narrator ""
-    narrator "接下来进入互动模式，请在输入框中输入：你好、聊天、再见"
-    narrator "AI 会根据你的输入匹配对应选项。"
+    aria "等等！"
+    aria "你真的要进去吗？"
+    aria "这座塔很危险，已经有很多人进去后再也没有回来..."
 
     interact:
-        "你好" -> interact_hello (desc="打招呼、说你好、问候")
-        "聊天" -> interact_chat (desc="聊天、搭话、交谈、说话")
-        "再见" -> interact_bye (desc="告别、说再见、离开、拜拜")
-        fallback "没听懂你的意思，请尝试说'你好'、'聊天'或'再见'。"
+        "我必须去" -> insist (desc="坚持要进入、一定要进去")
+        "你说得对" -> hesitate (desc="犹豫、听她的话")
+        "你是谁？" -> ask_aria (desc="问她是谁、询问她的身份")
+        fallback "艾丽娅看着你，眼中满是担忧。"
     end
 end
 
-label interact_hello:
-    yuki "你好呀！"
-    set relationship += 10
-    narrator "✓ 互动模式正常：你好"
-    jump after_interact
-end
+label look_around:
+    set wisdom += 10
+    bg "tower_outside.png"
 
-label interact_chat:
-    yuki "想聊些什么呢？"
-    set relationship += 5
-    narrator "✓ 互动模式正常：聊天"
-    jump after_interact
-end
-
-label interact_bye:
-    narrator "你说了再见。"
-    narrator "✓ 互动模式正常：再见"
-    jump after_interact
-end
-
-label after_interact:
-    narrator "互动模式结束，测试通过！"
-    set test_passed += 1
-
-    narrator ""
-    narrator "--- 10. Python 嵌入 ---"
+    narrator "你在塔底四处查看..."
+    narrator "发现了一些古老的符文刻在石头上..."
 
     python:
         import random
-        qf.set("dice", random.randint(1, 6))
+        found = random.random() > 0.5
+        qf.set("secret_found", found)
     end
 
-    narrator "掷骰子结果：{dice}"
-    narrator "✓ Python 嵌入功能正常"
-    set test_passed += 1
+    if secret_found == true:
+        narrator "你发现了一块隐藏的石碑！"
+        set wisdom += 20
+    else:
+        narrator "没有发现特别的东西..."
+    end
 
-    narrator ""
-    narrator "--- 11. Python 表达式插值 ---"
-    narrator ""
-    narrator "下面应在同一行中执行 Python 并显示结果："
+    options:
+        "现在进去" -> enter_tower (desc="进入塔中")
+        "继续探索" -> search_more (desc="继续寻找、再仔细看看")
+    end
+end
+
+label search_more:
+    narrator "你继续搜索..."
+    set wisdom += 5
+
+    options:
+        "进入塔内" -> enter_tower (desc="进入塔中")
+    end
+end
+
+# ============================================
+# 第二章：与艾丽娅的相遇
+# ============================================
+
+label insist:
+    set friendship += 5
+    aria "好吧...既然你如此坚持，我和你一起去。"
+    aria "我叫艾丽娅，是研究这座塔的学者。"
+    set friendship += 10
+
+    jump tower_lobby
+end
+
+label hesitate:
+    set wisdom += 5
+    aria "太好了！你很谨慎。"
+    aria "我是艾丽娅，一直在研究这座塔。"
+    aria "既然你来了，我们可以一起探索。"
+    set friendship += 15
+
+    jump tower_lobby
+end
+
+label ask_aria:
+    aria "我叫艾丽娅，是这附近村庄的学者。"
+    aria "我一直在研究这座塔的历史和秘密。"
+    set friendship += 10
+
+    interact:
+        "一起进去" -> go_together (desc="邀请她一起、组队探索")
+        "我自己进去" -> go_alone (desc="独自进入")
+        fallback "艾丽娅期待地看着你。"
+    end
+end
+
+label go_together:
+    set friendship += 20
+    aria "太好了！我们一起吧！"
+
+    jump tower_lobby
+end
+
+label go_alone:
+    aria "好吧...那你小心..."
+    aria "如果你改变主意，我会在入口等你。"
+
+    jump tower_lobby
+end
+
+# ============================================
+# 第三章：塔内大厅
+# ============================================
+
+label tower_lobby:
+    bg "tower_lobby.png"
+
+    narrator "你们走进了塔内大厅..."
+    narrator "巨大的石柱支撑着穹顶，墙壁上刻满了古老的壁画。"
+
+    ""
+
+    elder "欢迎，年轻的旅行者们..."
+
+    aria "长老！您怎么在这里？"
+
+    elder "我一直在等待有缘人..."
+    elder "这座塔考验的是勇气、智慧与友谊。"
+    elder "只有兼具三者的人，才能到达塔顶..."
+
+    options:
+        "请问塔顶有什么？" -> ask_top (desc="询问塔顶的秘密")
+        "我们如何开始？" -> ask_begin (desc="问如何开始、流程是什么")
+        "保存进度" -> do_save (desc="保存游戏进度")
+    end
+end
+
+label ask_top:
+    set wisdom += 5
+    elder "塔顶封印着'时光之心'..."
+    elder "它可以让你看到过去，或者改变一个小决定..."
+
+    jump tower_lobby_choice
+end
+
+label ask_begin:
+    set wisdom += 5
+    elder "很好，你们已经准备好了..."
+    elder "前面有三道门，每道门都代表一个考验..."
+    elder "选择一门，完成考验后继续前进。"
+
+    jump choose_door
+end
+
+label do_save:
+    save
+    narrator "进度已保存！"
+
+    jump tower_lobby
+end
+
+label tower_lobby_choice:
+    options:
+        "开始考验" -> choose_door (desc="选择一道门开始")
+        "和艾丽娅聊聊" -> talk_aria (desc="和艾丽娅对话")
+        "保存" -> do_save (desc="保存")
+    end
+end
+
+label talk_aria:
+    set friendship += 5
+
+    if friendship >= 30:
+        aria "和你在一起，我感觉很安心。"
+    else:
+        aria "这座塔真的很神秘，不是吗？"
+    end
+
+    interact:
+        "你害怕吗？" -> ask_fear (desc="问她是否害怕")
+        "你知道的好多" -> compliment (desc="夸奖她、说她厉害")
+        "继续前进" -> tower_lobby_choice (desc="回到选择")
+        fallback "艾丽娅微笑着看着你。"
+    end
+end
+
+label ask_fear:
+    aria "说不害怕是假的..."
+    aria "但有些事，必须要有人去做..."
+    set friendship += 5
+
+    jump talk_aria
+end
+
+label compliment:
+    aria "谢谢！"
+    aria "我只是读了很多书而已..."
+    set friendship += 10
+
+    jump talk_aria
+end
+
+# ============================================
+# 第四章：三道门的考验
+# ============================================
+
+label choose_door:
+    bg "three_doors.png"
+
+    narrator "在你面前有三道门："
+    narrator "红色的门散发着温暖的光芒..."
+    narrator "蓝色的门透着沉静的气息..."
+    narrator "金色的门则闪烁着神秘的光..."
+
+    options:
+        "红色门（勇气）" -> door_courage (desc="选择红色门、勇气考验")
+        "蓝色门（智慧）" -> door_wisdom (desc="选择蓝色门、智慧考验")
+        "金色门（友谊）" -> door_friendship (desc="选择金色门、友谊考验")
+    end
+end
+
+label door_courage:
+    set game_phase = 1
+    bg "courage_room.png"
+
+    narrator "你走进了红色门..."
+    narrator "房间中央有一个燃烧的火盆，火焰中悬浮着一把钥匙。"
+
+    guardian "想要这把钥匙？"
+    guardian "证明你的勇气！"
+
+    options:
+        "直接伸手去拿" -> grab_key (desc="冒险伸手拿钥匙")
+        "想想别的办法" -> think_courage (desc="想别的办法")
+    end
+end
+
+label grab_key:
+    set courage += 20
+    narrator "你勇敢地伸手向火焰..."
+    narrator "奇迹发生了，火焰没有灼伤你！"
+    narrator "你顺利拿到了钥匙！"
+
+    set has_key = true
+    guardian "很好！你通过了勇气的考验。"
+
+    jump return_to_lobby
+end
+
+label think_courage:
+    set wisdom += 10
+    narrator "你仔细观察火盆..."
+    narrator "发现火盆旁边有一个手套..."
+
+    options:
+        "用手套拿" -> use_glove (desc="戴上手套拿钥匙")
+        "还是直接拿" -> grab_key (desc="鼓起勇气直接拿")
+    end
+end
+
+label use_glove:
+    narrator "你戴上手套，顺利拿到了钥匙！"
+    set has_key = true
+    set courage += 10
+    guardian "有勇有谋，不错。"
+
+    jump return_to_lobby
+end
+
+label door_wisdom:
+    set game_phase = 1
+    bg "wisdom_room.png"
+
+    narrator "你走进了蓝色门..."
+    narrator "这是一个巨大的图书馆，书架间漂浮着一本书。"
+
+    kai "嗨！你也是来参加考验的吗？"
+
+    aria "凯？你怎么也在这里？"
+
+    kai "哈哈，我到处探险，就找到这里了！"
+    kai "这道题有点难...一起研究吧？"
+
+    narrator "书上写着一道谜题："
+    narrator "\"一个数，加上 7，乘以 3，减去 12，再除以 3，得 11。这个数是多少？\""
+
+    var answer = 0
+    input answer "你的答案是："
 
     python:
-        import math
-        qf.set("sqrt_val", int(math.sqrt(144)))
+        ans = qf.get("answer")
+        correct = False
+        if isinstance(ans, int) and ans == 8:
+            correct = True
+        qf.set("has_crystal", correct)
     end
 
-    narrator "√144 = {sqrt_val}"
-    set test_passed += 1
+    if has_crystal == true:
+        set wisdom += 30
+        narrator "正确！书发出了柔和的光芒，一颗水晶浮现出来！"
+        kai "厉害！你真聪明！"
+    else:
+        set wisdom += 10
+        narrator "不对...但你的努力被看到了..."
+        narrator "水晶还是出现了..."
+        set has_crystal = true
+        kai "没关系，至少我们通过了！"
+    end
 
-    narrator ""
-    narrator "--- 12. Call/Return ---"
-    narrator ""
-    narrator "调用子程序..."
-
-    call test_subroutine
-
-    narrator "✓ 从子程序返回，Call/Return 功能正常"
-    set test_passed += 1
-
-    narrator ""
-    narrator "--- 13. 多脚本跳转 ---"
-    narrator ""
-    narrator "即将跳转到 chapter_test.qf 中的标签..."
-
-    jump chapter_test.begin
+    set friendship += 10
+    jump return_to_lobby
 end
 
-# 子程序
-label test_subroutine:
-    yuki "这是子程序的内容~"
-    narrator "（如果看到这里后自动返回主流程，说明 Call/Return 正常）"
-    return
+label door_friendship:
+    set game_phase = 1
+    bg "friendship_room.png"
+
+    narrator "你走进了金色门..."
+    narrator "房间里有两座石座，需要两个人一起才能打开机关..."
+
+    if friendship < 20:
+        narrator "但你和艾丽娅还不够信任彼此..."
+        narrator "机关纹丝不动..."
+
+        options:
+            "回到大厅" -> return_to_lobby (desc="先回去")
+        end
+    end
+
+    aria "这看起来需要两个人合作..."
+    kai "我来帮你们！"
+    narrator "你们三人一起站在石座上..."
+    narrator "机关缓缓打开，出现了一颗宝石！"
+
+    set friendship += 30
+    set courage += 10
+    set wisdom += 10
+
+    narrator "友谊的力量！"
+
+    jump return_to_lobby
 end
 
-# 多脚本跳转的目标（由 chapter_test.qf 返回后继续）
-label after_chapter:
-    narrator ""
-    narrator "--- 14. Wait 等待 ---"
+# ============================================
+# 第五章：返回大厅与继续
+# ============================================
 
-    narrator "等待 1.5 秒..."
-    wait 1.5
-    narrator "✓ 等待功能正常"
-    set test_passed += 1
+label return_to_lobby:
+    bg "tower_lobby.png"
 
-    narrator ""
-    narrator "--- 15. 存档 ---"
+    narrator "你回到了大厅..."
 
-    narrator "正在存档..."
-    save
-    narrator "✓ 存档功能正常"
-    set test_passed += 1
+    if has_key == true and has_crystal == true:
+        elder "太好了！你已经收集了两件物品！"
+        elder "塔顶的大门已经可以打开了！"
+        options:
+            "前往塔顶" -> final_stairs (desc="上塔顶、最终挑战")
+            "再休息一下" -> rest (desc="休息、准备好再去")
+        end
+    else:
+        options:
+            "选择另一道门" -> choose_door (desc="继续考验")
+            "和同伴聊聊" -> talk_aria (desc="对话")
+            "保存" -> do_save (desc="保存")
+        end
+    end
+end
 
-    narrator ""
-    narrator "━━━━━━━━━━━━━━━━━━━━"
-    narrator "测试完成！通过 {test_passed} 项测试"
-    narrator "━━━━━━━━━━━━━━━━━━━━"
-    narrator ""
-    narrator "如果所有功能都显示正常，说明引擎工作正常。"
+label rest:
+    narrator "你们休息了一会儿，恢复了精神..."
+    set courage += 5
+    set wisdom += 5
+    set friendship += 5
 
+    jump final_stairs
+end
+
+# ============================================
+# 第六章：塔顶与结局
+# ============================================
+
+label final_stairs:
+    bg "stairs.png"
+
+    narrator "你沿着螺旋阶梯向上攀登..."
+    narrator "阶梯似乎没有尽头..."
+
+    var i = 1
+    while i <= 5:
+        narrator "第 {i} 层..."
+        set i += 1
+    end
+
+    narrator "终于，你到达了塔顶！"
+
+    jump tower_top
+end
+
+label tower_top:
+    bg "tower_top.png"
+
+    guardian "欢迎来到塔顶..."
+    guardian "时光之心就在中央的坛上..."
+    guardian "但你要做出选择..."
+    guardian "它可以让你回到过去的一个瞬间..."
+    guardian "或者，让一切继续向前..."
+
+    ""
+
+    var total_score = courage + wisdom + friendship
+
+    narrator "【状态面板】"
+    narrator "勇气：{courage}"
+    narrator "智慧：{wisdom}"
+    narrator "友谊：{friendship}"
+    narrator "总分：{total_score}"
+
+    ""
+
+    if total_score >= 80:
+        jump true_ending
+    elseif total_score >= 50:
+        jump normal_ending
+    else:
+        jump sad_ending
+    end
+end
+
+# ============================================
+# 结局分支
+# ============================================
+
+label true_ending:
+    bg "sunrise.png"
+
+    guardian "你的心灵如此纯净..."
+    guardian "你已经不需要改变什么..."
+    guardian "时光之心会祝福你的未来！"
+
+    ""
+    narrator "你走出了时光之塔..."
+    narrator "朝阳升起，照亮了整片大陆..."
+
+    if friendship >= 40:
+        aria "我们会一直是朋友，对吗？"
+        kai "当然！"
+    end
+
+    ""
+    narrator "【真结局：时光的祝福】"
+    narrator "感谢游玩《时光之塔》！"
+
+    wait click
+    quit
+end
+
+label normal_ending:
+    bg "sunset.png"
+
+    guardian "你已经做得很好了..."
+    guardian "带着这段经历继续前进吧..."
+
+    narrator "你走出了塔..."
+    narrator "夕阳西下，未来还有很多可能..."
+
+    ""
+    narrator "【普通结局：新的旅程】"
+    narrator "感谢游玩《时光之塔》！"
+
+    wait click
+    quit
+end
+
+label sad_ending:
+    bg "rainy.png"
+
+    guardian "也许...你还没有准备好..."
+    guardian "但不要紧，每个人都有自己的节奏..."
+    guardian "下次再来吧..."
+
+    narrator "你离开了塔..."
+    narrator "雨还在下，但你知道..."
+    narrator "总有一天，你会回来的..."
+
+    ""
+    narrator "【结局：未完待续】"
+    narrator "感谢游玩《时光之塔》！"
+
+    options:
+        "重新开始" -> start (desc="重新开始游戏")
+        "退出游戏" -> quit_game (desc="退出游戏")
+    end
+end
+
+label quit_game:
     quit
 end

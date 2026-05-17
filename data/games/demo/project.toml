@@ -1,10 +1,9 @@
 [project]
-title = "Demo Story"
-author = "QriaFiction"
-version = "0.1.0"
+title = "时光之塔（自带示例）"
+author = "gpchn (QriaFiction dev)"
+version = "1.0.0"
+description = "一个完整的互动小说示例"
 
 [display]
 width = 900
-height = 680
-
-[characters]
+height = 650

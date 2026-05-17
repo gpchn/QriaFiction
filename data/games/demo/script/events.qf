@@ -1,0 +1,69 @@
+# ============================================
+# 额外事件与子例程
+# ============================================
+
+# 日常问候事件
+label daily_greeting:
+    if day == 1:
+        narrator "新的一天开始了！"
+    end
+    if day == 2:
+        narrator "第二天..."
+    end
+    set day += 1
+    return
+end
+
+# 存档提示
+label save_reminder:
+    narrator "建议您现在保存一下进度..."
+    options:
+        "保存" -> do_save (desc="保存游戏")
+        "继续" -> continue_now (desc="不保存，继续")
+    end
+end
+
+label continue_now:
+    return
+end
+
+# 保存子例程
+label do_save:
+    save
+    narrator "进度已保存！"
+    return
+end
+
+# 一个使用 Python 的小游戏
+label dice_game:
+    narrator "让我们来玩一个掷骰子游戏！"
+
+    python:
+        import random
+        qf.set("dice1", random.randint(1, 6))
+        qf.set("dice2", random.randint(1, 6))
+    end
+
+    narrator "你掷出了 {dice1} 点和 {dice2} 点..."
+
+    python:
+        d1 = qf.get("dice1")
+        d2 = qf.get("dice2")
+        total = d1 + d2
+        qf.set("total", total)
+        if total > 7:
+            qf.set("win", True)
+        else:
+            qf.set("win", False)
+    end
+
+    narrator "总和是 {total}！"
+
+    if win == true:
+        narrator "你赢了！"
+    else:
+        narrator "再试一次吧！"
+    end
+
+    return
+end
